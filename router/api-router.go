@@ -196,7 +196,7 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.POST("/waffo-pancake/subscription-product-options", controller.ListWaffoPancakeSubscriptionProductOptions)
 		}
 
-		// Custom OAuth provider management (root only)
+		// Custom OAuth provider management (admin only)
 		customOAuthRoute := apiRouter.Group("/custom-oauth-provider")
 		customOAuthRoute.Use(middleware.RootAuth())
 		{
@@ -278,6 +278,17 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.DELETE("/:id", controller.DeleteToken)
 			tokenRoute.POST("/batch", controller.DeleteTokenBatch)
 			tokenRoute.POST("/batch/keys", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetTokenKeysBatch)
+		}
+
+		chatRoute := apiRouter.Group("/chat")
+		chatRoute.Use(middleware.UserAuth())
+		{
+			chatRoute.GET("/conversations", controller.ListChatConversations)
+			chatRoute.POST("/conversations", controller.CreateChatConversation)
+			chatRoute.PATCH("/conversations/:id", controller.UpdateChatConversation)
+			chatRoute.DELETE("/conversations/:id", controller.DeleteChatConversation)
+			chatRoute.GET("/conversations/:id/messages", controller.ListChatMessages)
+			chatRoute.POST("/conversations/:id/messages", controller.AppendChatMessages)
 		}
 
 		usageRoute := apiRouter.Group("/usage")

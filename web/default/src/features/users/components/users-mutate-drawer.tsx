@@ -255,7 +255,7 @@ export function UsersMutateDrawer({
                           </SelectContent>
                         </Select>
                         <FormDescription>
-                          {t("Set the user's role (cannot be Root)")}
+                          {t("Set the user's role")}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

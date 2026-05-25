@@ -288,7 +288,7 @@ function filterNavItems(
  *      explicitly set it to false; undefined fields default to visible so
  *      legacy users with empty sidebar_modules keep the full admin view.
  *      The overlay is also skipped entirely when the backend tells us the
- *      user cannot configure sidebar_settings (e.g. root accounts), so a
+ *      user cannot configure sidebar_settings (e.g. administrator accounts), so a
  *      stale historical value cannot lock them out of entries they have no
  *      UI to restore.
  */
@@ -306,7 +306,7 @@ export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
 
   const userConfig = useMemo(() => {
     // If the backend marks the user as unable to configure the sidebar
-    // (e.g. root accounts), skip the user overlay entirely — a stale
+    // (e.g. administrator accounts), skip the user overlay entirely — a stale
     // historical sidebar_modules value from a previous role would otherwise
     // hide admin entries for someone who has no in-product UI to restore
     // them.

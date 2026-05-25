@@ -61,7 +61,7 @@ func PostSetup(c *gin.Context) {
 		return
 	}
 
-	// Check if root user already exists
+	// Check if an administrator already exists
 	rootExists := model.RootUserExists()
 
 	var req SetupRequest
@@ -101,7 +101,7 @@ func PostSetup(c *gin.Context) {
 			return
 		}
 
-		// Create root user
+		// Create initial admin user
 		hashedPassword, err := common.Password2Hash(req.Password)
 		if err != nil {
 			c.JSON(200, gin.H{
@@ -113,9 +113,9 @@ func PostSetup(c *gin.Context) {
 		rootUser := model.User{
 			Username:    req.Username,
 			Password:    hashedPassword,
-			Role:        common.RoleRootUser,
+			Role:        common.RoleAdminUser,
 			Status:      common.UserStatusEnabled,
-			DisplayName: "Root User",
+			DisplayName: "Admin User",
 			AccessToken: nil,
 			Quota:       100000000,
 		}

@@ -52,7 +52,7 @@ const STEPS = [
   },
   {
     titleKey: 'Administrator account',
-    descriptionKey: 'Create credentials for the root user',
+    descriptionKey: 'Create credentials for the administrator account',
   },
   {
     titleKey: 'Usage mode',

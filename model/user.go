@@ -127,26 +127,16 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 		"personal": true,
 	}
 
-	// 管理员区域 - 根据角色决定
-	if userRole == common.RoleAdminUser {
-		// 管理员可以访问管理员区域，但不能访问系统设置
+	// Admin area - admin is the highest role and can access all management modules.
+	if common.IsAdminRole(userRole) {
 		defaultConfig["admin"] = map[string]interface{}{
-			"enabled":    true,
-			"channel":    true,
-			"models":     true,
-			"redemption": true,
-			"user":       true,
-			"setting":    false, // 管理员不能访问系统设置
-		}
-	} else if userRole == common.RoleRootUser {
-		// 超级管理员可以访问所有功能
-		defaultConfig["admin"] = map[string]interface{}{
-			"enabled":    true,
-			"channel":    true,
-			"models":     true,
-			"redemption": true,
-			"user":       true,
-			"setting":    true,
+			"enabled":      true,
+			"channel":      true,
+			"models":       true,
+			"redemption":   true,
+			"user":         true,
+			"subscription": true,
+			"setting":      true,
 		}
 	}
 	// 普通用户不包含admin区域
@@ -944,13 +934,8 @@ func DeltaUpdateUserQuota(id int, delta int) (err error) {
 	}
 }
 
-//func GetRootUserEmail() (email string) {
-//	DB.Model(&User{}).Where("role = ?", common.RoleRootUser).Select("email").Find(&email)
-//	return email
-//}
-
 func GetRootUser() (user *User) {
-	DB.Where("role = ?", common.RoleRootUser).First(&user)
+	DB.Where("role >= ?", common.RoleAdminUser).Order("role desc, id asc").First(&user)
 	return user
 }
 
@@ -1049,7 +1034,7 @@ func (user *User) FillUserByLinuxDOId() error {
 
 func RootUserExists() bool {
 	var user User
-	err := DB.Where("role = ?", common.RoleRootUser).First(&user).Error
+	err := DB.Where("role >= ?", common.RoleAdminUser).First(&user).Error
 	if err != nil {
 		return false
 	}

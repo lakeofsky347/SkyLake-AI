@@ -27,7 +27,6 @@ import {
   Badge,
 } from '@douyinfe/semi-ui';
 import {
-  isRoot,
   isAdmin,
   renderQuota,
   stringToColor,
@@ -80,15 +79,7 @@ const UserInfoHeader = ({ t, userState }) => {
                     {getUsername()}
                   </div>
                   <div className='flex flex-wrap items-center gap-2'>
-                    {isRoot() ? (
-                      <Tag
-                        size='large'
-                        shape='circle'
-                        style={{ color: 'white' }}
-                      >
-                        {t('超级管理员')}
-                      </Tag>
-                    ) : isAdmin() ? (
+                    {isAdmin() ? (
                       <Tag
                         size='large'
                         shape='circle'

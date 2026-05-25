@@ -24,7 +24,7 @@ import { isSidebarModuleEnabled } from '@/lib/nav-modules'
 export const Route = createFileRoute('/_authenticated/console/playground/')({
   beforeLoad: () => {
     if (!isSidebarModuleEnabled('chat', 'playground')) {
-      throw redirect({ to: '/console/dashboard/overview' })
+      throw redirect({ to: '/console/dashboard' })
     }
   },
   component: PlaygroundPage,
@@ -37,4 +37,3 @@ function PlaygroundPage() {
     </Main>
   )
 }
-

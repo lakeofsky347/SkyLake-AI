@@ -66,7 +66,6 @@ export const STATIC_I18N_KEYS = [
   'Less',
 
   // Roles
-  'Super Admin',
   'Admin',
   'User',
   'Guest',
@@ -93,7 +92,6 @@ export const STATIC_I18N_KEYS = [
   'Enter API key for this channel',
 
   // Users
-  'Root',
   'Deleted',
   'User created successfully',
   'User updated successfully',
@@ -170,7 +168,7 @@ export const STATIC_I18N_KEYS = [
   // Setup wizard — steps
   'Database check',
   'Verify your database connection',
-  'Create credentials for the root user',
+  'Create credentials for the administrator account',
   'Choose how the platform will operate',
   'Review & initialize',
   'Confirm settings and finish setup',

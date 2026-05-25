@@ -2669,7 +2669,7 @@
       "post": {
         "summary": "获取渠道密钥",
         "deprecated": false,
-        "description": "👑 需要超级管理员权限（Root）+ 安全验证",
+        "description": "需要管理员权限 + 安全验证",
         "tags": [
           "渠道管理"
         ],
@@ -4799,7 +4799,7 @@
       "get": {
         "summary": "获取系统选项",
         "deprecated": false,
-        "description": "👑 需要超级管理员权限（Root）",
+        "description": "需要管理员权限",
         "tags": [
           "系统设置"
         ],
@@ -4822,7 +4822,7 @@
       "put": {
         "summary": "更新系统选项",
         "deprecated": false,
-        "description": "👑 需要超级管理员权限（Root）",
+        "description": "需要管理员权限",
         "tags": [
           "系统设置"
         ],
@@ -4847,7 +4847,7 @@
       "post": {
         "summary": "重置模型倍率",
         "deprecated": false,
-        "description": "👑 需要超级管理员权限（Root）",
+        "description": "需要管理员权限",
         "tags": [
           "系统设置"
         ],
@@ -4872,7 +4872,7 @@
       "post": {
         "summary": "迁移控制台设置",
         "deprecated": false,
-        "description": "👑 需要超级管理员权限（Root）",
+        "description": "需要管理员权限",
         "tags": [
           "系统设置"
         ],
@@ -4897,7 +4897,7 @@
       "get": {
         "summary": "获取可同步渠道",
         "deprecated": false,
-        "description": "👑 需要超级管理员权限（Root）",
+        "description": "需要管理员权限",
         "tags": [
           "系统设置"
         ],
@@ -4922,7 +4922,7 @@
       "post": {
         "summary": "获取上游倍率",
         "deprecated": false,
-        "description": "👑 需要超级管理员权限（Root）",
+        "description": "需要管理员权限",
         "tags": [
           "系统设置"
         ],

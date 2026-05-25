@@ -31,7 +31,12 @@ import { DataTableColumnHeader } from '@/components/data-table'
 import { GroupBadge } from '@/components/group-badge'
 import { LongText } from '@/components/long-text'
 import { StatusBadge, dotColorMap } from '@/components/status-badge'
-import { USER_STATUSES, USER_ROLES, isUserDeleted } from '../constants'
+import {
+  USER_ROLE,
+  USER_STATUSES,
+  USER_ROLES,
+  isUserDeleted,
+} from '../constants'
 import { type User } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 
@@ -243,7 +248,11 @@ export function useUsersColumns(): ColumnDef<User>[] {
       ),
       cell: ({ row }) => {
         const roleValue = row.getValue('role') as number
-        const roleConfig = USER_ROLES[roleValue as keyof typeof USER_ROLES]
+        const roleKey =
+          roleValue >= USER_ROLE.ADMIN
+            ? USER_ROLE.ADMIN
+            : (roleValue as keyof typeof USER_ROLES)
+        const roleConfig = USER_ROLES[roleKey as keyof typeof USER_ROLES]
 
         if (!roleConfig) {
           return null
@@ -259,7 +268,10 @@ export function useUsersColumns(): ColumnDef<User>[] {
         )
       },
       filterFn: (row, id, value) => {
-        return value.includes(String(row.getValue(id)))
+        const roleValue = row.getValue(id) as number
+        const roleFilterValue =
+          roleValue >= USER_ROLE.ADMIN ? USER_ROLE.ADMIN : roleValue
+        return value.includes(String(roleFilterValue))
       },
       enableSorting: false,
       meta: { label: t('Role') },

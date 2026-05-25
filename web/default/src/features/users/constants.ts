@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Shield, User, Users } from 'lucide-react'
+import { User, Users } from 'lucide-react'
 import type { User as UserType } from './types'
 
 // ============================================================================
@@ -69,7 +69,6 @@ export const getUserStatusOptions = (t: (key: string) => string) => [
 export const USER_ROLE = {
   USER: 1,
   ADMIN: 10,
-  ROOT: 100,
 } as const
 
 export const USER_ROLES = {
@@ -83,17 +82,11 @@ export const USER_ROLES = {
     value: USER_ROLE.ADMIN,
     icon: Users,
   },
-  [USER_ROLE.ROOT]: {
-    labelKey: 'Root',
-    value: USER_ROLE.ROOT,
-    icon: Shield,
-  },
 } as const
 
 export const getUserRoleOptions = (t: (key: string) => string) => [
   { label: t('User'), value: String(USER_ROLE.USER), icon: User },
   { label: t('Admin'), value: String(USER_ROLE.ADMIN), icon: Users },
-  { label: t('Root'), value: String(USER_ROLE.ROOT), icon: Shield },
 ]
 
 // ============================================================================

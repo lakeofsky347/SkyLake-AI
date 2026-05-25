@@ -49,16 +49,11 @@ const renderRole = (role, t) => {
           {t('普通用户')}
         </Tag>
       );
+    case 100:
     case 10:
       return (
         <Tag color='yellow' shape='circle'>
           {t('管理员')}
-        </Tag>
-      );
-    case 100:
-      return (
-        <Tag color='orange' shape='circle'>
-          {t('超级管理员')}
         </Tag>
       );
     default:

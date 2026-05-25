@@ -265,7 +265,7 @@ func SearchUsers(c *gin.Context) {
 }
 
 func canManageTargetRole(myRole int, targetRole int) bool {
-	return myRole == common.RoleRootUser || myRole > targetRole
+	return common.IsAdminRole(myRole)
 }
 
 func GetUser(c *gin.Context) {
@@ -438,19 +438,11 @@ func GetSelf(c *gin.Context) {
 func calculateUserPermissions(userRole int) map[string]interface{} {
 	permissions := map[string]interface{}{}
 
-	// 根据用户角色计算权限
-	if userRole == common.RoleRootUser {
-		// 超级管理员不需要边栏设置功能
+	// Admin is the highest role; do not let per-user sidebar settings hide
+	// management modules from admins.
+	if common.IsAdminRole(userRole) {
 		permissions["sidebar_settings"] = false
 		permissions["sidebar_modules"] = map[string]interface{}{}
-	} else if userRole == common.RoleAdminUser {
-		// 管理员可以设置边栏，但不包含系统设置功能
-		permissions["sidebar_settings"] = true
-		permissions["sidebar_modules"] = map[string]interface{}{
-			"admin": map[string]interface{}{
-				"setting": false, // 管理员不能访问系统设置
-			},
-		}
 	} else {
 		// 普通用户只能设置个人功能，不包含管理员区域
 		permissions["sidebar_settings"] = true
@@ -490,26 +482,16 @@ func generateDefaultSidebarConfig(userRole int) string {
 		"personal": true,
 	}
 
-	// 管理员区域 - 根据角色决定
-	if userRole == common.RoleAdminUser {
-		// 管理员可以访问管理员区域，但不能访问系统设置
+	// Admin area - admin is the highest role and can access all management modules.
+	if common.IsAdminRole(userRole) {
 		defaultConfig["admin"] = map[string]interface{}{
-			"enabled":    true,
-			"channel":    true,
-			"models":     true,
-			"redemption": true,
-			"user":       true,
-			"setting":    false, // 管理员不能访问系统设置
-		}
-	} else if userRole == common.RoleRootUser {
-		// 超级管理员可以访问所有功能
-		defaultConfig["admin"] = map[string]interface{}{
-			"enabled":    true,
-			"channel":    true,
-			"models":     true,
-			"redemption": true,
-			"user":       true,
-			"setting":    true,
+			"enabled":      true,
+			"channel":      true,
+			"models":       true,
+			"redemption":   true,
+			"user":         true,
+			"subscription": true,
+			"setting":      true,
 		}
 	}
 	// 普通用户不包含admin区域
@@ -573,6 +555,10 @@ func UpdateUser(c *gin.Context) {
 	myRole := c.GetInt("role")
 	if !canManageTargetRole(myRole, originUser.Role) {
 		common.ApiErrorI18n(c, i18n.MsgUserNoPermissionHigherLevel)
+		return
+	}
+	if updatedUser.Role != originUser.Role && !common.IsAssignableRole(updatedUser.Role) {
+		common.ApiErrorI18n(c, i18n.MsgUserCannotCreateHigherLevel)
 		return
 	}
 	if !canManageTargetRole(myRole, updatedUser.Role) {
@@ -776,7 +762,7 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 	myRole := c.GetInt("role")
-	if myRole <= originUser.Role {
+	if !canManageTargetRole(myRole, originUser.Role) {
 		common.ApiErrorI18n(c, i18n.MsgUserNoPermissionHigherLevel)
 		return
 	}
@@ -794,12 +780,6 @@ func DeleteUser(c *gin.Context) {
 
 func DeleteSelf(c *gin.Context) {
 	id := c.GetInt("id")
-	user, _ := model.GetUserById(id, false)
-
-	if user.Role == common.RoleRootUser {
-		common.ApiErrorI18n(c, i18n.MsgUserCannotDeleteRootUser)
-		return
-	}
 
 	err := model.DeleteUserById(id)
 	if err != nil {
@@ -829,7 +809,7 @@ func CreateUser(c *gin.Context) {
 		user.DisplayName = user.Username
 	}
 	myRole := c.GetInt("role")
-	if user.Role >= myRole {
+	if !common.IsAdminRole(myRole) || !common.IsAssignableRole(user.Role) {
 		common.ApiErrorI18n(c, i18n.MsgUserCannotCreateHigherLevel)
 		return
 	}
@@ -885,17 +865,9 @@ func ManageUser(c *gin.Context) {
 	switch req.Action {
 	case "disable":
 		user.Status = common.UserStatusDisabled
-		if user.Role == common.RoleRootUser {
-			common.ApiErrorI18n(c, i18n.MsgUserCannotDisableRootUser)
-			return
-		}
 	case "enable":
 		user.Status = common.UserStatusEnabled
 	case "delete":
-		if user.Role == common.RoleRootUser {
-			common.ApiErrorI18n(c, i18n.MsgUserCannotDeleteRootUser)
-			return
-		}
 		if err := user.Delete(); err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
@@ -909,20 +881,12 @@ func ManageUser(c *gin.Context) {
 			common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for user %d: %s", user.Id, err.Error()))
 		}
 	case "promote":
-		if myRole != common.RoleRootUser {
-			common.ApiErrorI18n(c, i18n.MsgUserAdminCannotPromote)
-			return
-		}
 		if user.Role >= common.RoleAdminUser {
 			common.ApiErrorI18n(c, i18n.MsgUserAlreadyAdmin)
 			return
 		}
 		user.Role = common.RoleAdminUser
 	case "demote":
-		if user.Role == common.RoleRootUser {
-			common.ApiErrorI18n(c, i18n.MsgUserCannotDemoteRootUser)
-			return
-		}
 		if user.Role == common.RoleCommonUser {
 			common.ApiErrorI18n(c, i18n.MsgUserAlreadyCommon)
 			return

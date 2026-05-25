@@ -187,11 +187,21 @@ const (
 	RoleGuestUser  = 0
 	RoleCommonUser = 1
 	RoleAdminUser  = 10
-	RoleRootUser   = 100
+	// Legacy installs may still have role=100 users. Treat them as admins,
+	// but do not expose or create a separate super-admin role anymore.
+	RoleLegacyRootUser = 100
 )
 
 func IsValidateRole(role int) bool {
-	return role == RoleGuestUser || role == RoleCommonUser || role == RoleAdminUser || role == RoleRootUser
+	return role == RoleGuestUser || role == RoleCommonUser || role == RoleAdminUser || role == RoleLegacyRootUser
+}
+
+func IsAdminRole(role int) bool {
+	return role >= RoleAdminUser
+}
+
+func IsAssignableRole(role int) bool {
+	return role == RoleCommonUser || role == RoleAdminUser
 }
 
 var (

@@ -672,7 +672,7 @@ export function PaymentSettingsSection({
             <div className='space-y-3'>
               <p>
                 {t(
-                  'Payment, redemption codes, subscription plans, and invitation rewards are locked until the root administrator confirms the compliance terms.'
+                  'Payment, redemption codes, subscription plans, and invitation rewards are locked until an administrator confirms the compliance terms.'
                 )}
               </p>
               <ol className='list-decimal space-y-1 pl-5'>

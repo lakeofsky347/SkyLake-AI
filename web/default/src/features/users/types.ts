@@ -26,7 +26,7 @@ import { z } from 'zod'
 export const userStatusSchema = z.number()
 export type UserStatus = z.infer<typeof userStatusSchema>
 
-/** User role: 1 = common user, 10 = admin, 100 = root */
+/** User role: 1 = common user, 10 = admin. Legacy 100 values are treated as admin. */
 export const userRoleSchema = z.number()
 export type UserRole = z.infer<typeof userRoleSchema>
 

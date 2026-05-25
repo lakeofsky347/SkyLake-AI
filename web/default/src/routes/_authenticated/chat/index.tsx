@@ -17,9 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute } from '@tanstack/react-router'
-import { ChatAppPlaceholder } from '@/features/chat/app-placeholder'
+import { ChatApp } from '@/features/chat/app'
 
 export const Route = createFileRoute('/_authenticated/chat/')({
-  component: ChatAppPlaceholder,
+  component: ChatApp,
 })
-

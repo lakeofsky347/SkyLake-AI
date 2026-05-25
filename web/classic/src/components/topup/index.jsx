@@ -202,7 +202,7 @@ const TopUp = () => {
 
   const openTopUpLink = () => {
     if (!topUpLink) {
-      showError(t('超级管理员未设置充值链接！'));
+      showError(t('管理员未设置充值链接！'));
       return;
     }
     window.open(topUpLink, '_blank');

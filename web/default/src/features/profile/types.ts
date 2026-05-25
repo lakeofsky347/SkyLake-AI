@@ -39,7 +39,7 @@ export interface UserProfile {
   username: string
   /** Display name */
   display_name: string
-  /** User role (1=普通用户, 10=管理员, 100=超级管理员) */
+  /** User role (1=common user, 10=admin; legacy 100 values are treated as admin) */
   role: number
   /** Email address */
   email?: string

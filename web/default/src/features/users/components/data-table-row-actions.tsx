@@ -129,7 +129,6 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
 
   const isDisabled = user.status === USER_STATUS.DISABLED
   const isAdmin = user.role >= USER_ROLE.ADMIN
-  const isRoot = user.role === USER_ROLE.ROOT
 
   if (isUserDeleted(user)) {
     return null
@@ -167,10 +166,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
               </DropdownMenuShortcut>
             </DropdownMenuItem>
           ) : (
-            <DropdownMenuItem
-              onClick={() => handleManage('disable')}
-              disabled={isRoot}
-            >
+            <DropdownMenuItem onClick={() => handleManage('disable')}>
               {t('Disable')}
               <DropdownMenuShortcut>
                 <PowerOff size={16} />
@@ -178,7 +174,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
             </DropdownMenuItem>
           )}
 
-          {isAdmin && !isRoot && (
+          {isAdmin && (
             <DropdownMenuItem onClick={() => handleManage('demote')}>
               {t('Demote')}
               <DropdownMenuShortcut>
@@ -227,7 +223,6 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
               event.preventDefault()
               setResetPasskeyOpen(true)
             }}
-            disabled={isRoot}
           >
             {t('Reset Passkey')}
             <DropdownMenuShortcut>
@@ -240,7 +235,6 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
               event.preventDefault()
               setResetTwoFAOpen(true)
             }}
-            disabled={isRoot}
           >
             {t('Reset 2FA')}
             <DropdownMenuShortcut>
@@ -253,7 +247,6 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           <DropdownMenuItem
             onClick={handleDelete}
             className='text-destructive focus:text-destructive'
-            disabled={isRoot}
           >
             {t('Delete')}
             <DropdownMenuShortcut>

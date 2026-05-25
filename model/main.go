@@ -69,7 +69,7 @@ func createRootAccountIfNeed() error {
 	var user User
 	//if user.Status != common.UserStatusEnabled {
 	if err := DB.First(&user).Error; err != nil {
-		common.SysLog("no user exists, create a root user for you: username is root, password is 123456")
+		common.SysLog("no user exists, create an admin user for you: username is root, password is 123456")
 		hashedPassword, err := common.Password2Hash("123456")
 		if err != nil {
 			return err
@@ -77,9 +77,9 @@ func createRootAccountIfNeed() error {
 		rootUser := User{
 			Username:    "root",
 			Password:    hashedPassword,
-			Role:        common.RoleRootUser,
+			Role:        common.RoleAdminUser,
 			Status:      common.UserStatusEnabled,
-			DisplayName: "Root User",
+			DisplayName: "Admin User",
 			AccessToken: nil,
 			Quota:       100000000,
 		}
@@ -91,9 +91,9 @@ func createRootAccountIfNeed() error {
 func CheckSetup() {
 	setup := GetSetup()
 	if setup == nil {
-		// No setup record exists, check if we have a root user
+		// No setup record exists, check if we have an admin user
 		if RootUserExists() {
-			common.SysLog("system is not initialized, but root user exists")
+			common.SysLog("system is not initialized, but admin user exists")
 			// Create setup record
 			newSetup := Setup{
 				Version:       common.Version,
@@ -105,7 +105,7 @@ func CheckSetup() {
 			}
 			constant.Setup = true
 		} else {
-			common.SysLog("system is not initialized and no root user exists")
+			common.SysLog("system is not initialized and no admin user exists")
 			constant.Setup = false
 		}
 	} else {
@@ -281,6 +281,8 @@ func migrateDB() error {
 		&CustomOAuthProvider{},
 		&UserOAuthBinding{},
 		&PerfMetric{},
+		&ChatConversation{},
+		&ChatMessage{},
 	)
 	if err != nil {
 		return err
@@ -330,6 +332,8 @@ func migrateDBFast() error {
 		{&CustomOAuthProvider{}, "CustomOAuthProvider"},
 		{&UserOAuthBinding{}, "UserOAuthBinding"},
 		{&PerfMetric{}, "PerfMetric"},
+		{&ChatConversation{}, "ChatConversation"},
+		{&ChatMessage{}, "ChatMessage"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))
