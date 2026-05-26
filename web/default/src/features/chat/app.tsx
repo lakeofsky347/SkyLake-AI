@@ -44,7 +44,7 @@ import {
   deleteChatConversation,
   getChatConversations,
   getChatMessages,
-  sendChatMessage,
+  streamChatMessage,
   updateChatConversation,
 } from './api'
 import type { ChatConversation, ChatMessage, ChatRole } from './types'
@@ -286,10 +286,11 @@ export function ChatApp() {
 
     setIsSending(true)
     setInput('')
+    const thinkingText = t('Thinking...')
     const userMessage = createPendingMessage('user', content, selectedModel)
     const assistantPlaceholder = createPendingMessage(
       'assistant',
-      t('Thinking...'),
+      thinkingText,
       selectedModel
     )
     setPendingMessages([userMessage, assistantPlaceholder])
@@ -298,19 +299,33 @@ export function ChatApp() {
     try {
       const conversation = await ensureConversation(content)
       conversationIdForRefresh = conversation.id
-      const response = await sendChatMessage(conversation.id, {
-        content,
-        model: selectedModel,
-        group: selectedGroup || undefined,
-      })
-      if (!response.success || !response.data) {
-        throw new Error(response.message || t('Failed to send message'))
-      }
+      let streamedContent = ''
+      await streamChatMessage(
+        conversation.id,
+        {
+          content,
+          model: selectedModel,
+          group: selectedGroup || undefined,
+        },
+        (delta) => {
+          streamedContent += delta
+          setPendingMessages((messages) =>
+            messages.map((message) =>
+              message.id === assistantPlaceholder.id
+                ? { ...message, content: streamedContent || thinkingText }
+                : message
+            )
+          )
+        }
+      )
       setPendingMessages([])
-      await refreshChatData(response.data.conversation.id)
+      await refreshChatData(conversation.id)
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : ''
       const message =
-        error instanceof Error ? error.message : t('Failed to send message')
+        errorMessage && errorMessage !== 'Failed to send message'
+          ? errorMessage
+          : t('Failed to send message')
       toast.error(message)
       setPendingMessages([])
       if (conversationIdForRefresh !== null) {

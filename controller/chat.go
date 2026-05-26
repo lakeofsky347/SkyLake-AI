@@ -80,6 +80,19 @@ type chatRelayErrorResponse struct {
 	Error   any    `json:"error"`
 }
 
+type chatStreamCaptureWriter struct {
+	http.ResponseWriter
+	body        bytes.Buffer
+	statusCode  int
+	wroteHeader bool
+}
+
+type chatStreamCaptureResult struct {
+	Content string
+	Model   string
+	Usage   chatMessageUsage
+}
+
 func parseChatConversationId(c *gin.Context) (int, bool) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id <= 0 {
@@ -247,6 +260,106 @@ func callChatCompletionRelay(c *gin.Context, request *chatCompletionRelayRequest
 	return &completion, nil
 }
 
+func newChatStreamCaptureWriter(writer http.ResponseWriter) *chatStreamCaptureWriter {
+	return &chatStreamCaptureWriter{
+		ResponseWriter: writer,
+		statusCode:     http.StatusOK,
+	}
+}
+
+func (w *chatStreamCaptureWriter) WriteHeader(statusCode int) {
+	if w.wroteHeader {
+		return
+	}
+	w.statusCode = statusCode
+	w.wroteHeader = true
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (w *chatStreamCaptureWriter) Write(data []byte) (int, error) {
+	_, _ = w.body.Write(data)
+	return w.ResponseWriter.Write(data)
+}
+
+func (w *chatStreamCaptureWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func (w *chatStreamCaptureWriter) StatusCode() int {
+	return w.statusCode
+}
+
+func (w *chatStreamCaptureWriter) BodyBytes() []byte {
+	return w.body.Bytes()
+}
+
+func callChatCompletionRelayStream(c *gin.Context, request *chatCompletionRelayRequest) ([]byte, int, error) {
+	requestBody, err := common.Marshal(request)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	relayRequest := httptest.NewRequest(http.MethodPost, "/pg/chat/completions", bytes.NewReader(requestBody))
+	relayRequest = relayRequest.WithContext(c.Request.Context())
+	relayRequest.Header = c.Request.Header.Clone()
+	relayRequest.Header.Set("Content-Type", "application/json")
+	relayRequest.Header.Set("Accept", "text/event-stream")
+	relayRequest.ContentLength = int64(len(requestBody))
+
+	writer := newChatStreamCaptureWriter(c.Writer)
+	router := gin.New()
+	router.Use(middleware.BodyStorageCleanup())
+	playgroundRoute := router.Group("/pg")
+	playgroundRoute.Use(middleware.RouteTag("relay"))
+	playgroundRoute.Use(middleware.SystemPerformanceCheck())
+	playgroundRoute.Use(copyChatRelayContext(c), middleware.Distribute())
+	playgroundRoute.POST("/chat/completions", Playground)
+	router.ServeHTTP(writer, relayRequest)
+
+	statusCode := writer.StatusCode()
+	responseBody := writer.BodyBytes()
+	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
+		return responseBody, statusCode, fmt.Errorf("%s", chatRelayErrorMessage(responseBody))
+	}
+	return responseBody, statusCode, nil
+}
+
+func parseChatStreamCapture(data []byte) chatStreamCaptureResult {
+	var result chatStreamCaptureResult
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if payload == "" || payload == "[DONE]" {
+			continue
+		}
+
+		var response dto.ChatCompletionsStreamResponse
+		if err := common.UnmarshalJsonStr(payload, &response); err != nil {
+			continue
+		}
+		if strings.TrimSpace(response.Model) != "" {
+			result.Model = strings.TrimSpace(response.Model)
+		}
+		if response.Usage != nil {
+			result.Usage = chatMessageUsage{
+				PromptTokens:     response.Usage.PromptTokens,
+				CompletionTokens: response.Usage.CompletionTokens,
+				TotalTokens:      response.Usage.TotalTokens,
+			}
+		}
+		for _, choice := range response.Choices {
+			result.Content += choice.Delta.GetContentString()
+		}
+	}
+	result.Content = strings.TrimSpace(result.Content)
+	return result
+}
+
 func ListChatConversations(c *gin.Context) {
 	userId := c.GetInt("id")
 	startIdx, pageSize := parseChatPagination(c)
@@ -266,6 +379,99 @@ func ListChatConversations(c *gin.Context) {
 		"items": conversations,
 		"total": total,
 	})
+}
+
+func StreamChatMessage(c *gin.Context) {
+	userId := c.GetInt("id")
+	conversationId, ok := parseChatConversationId(c)
+	if !ok {
+		return
+	}
+	conversation, owned, err := ensureChatConversationOwned(userId, conversationId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if !owned {
+		common.ApiErrorMsg(c, "conversation not found")
+		return
+	}
+
+	var req sendChatMessageRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorMsg(c, "invalid request body")
+		return
+	}
+
+	content := strings.TrimSpace(req.Content)
+	if !validateChatContent(c, content) {
+		return
+	}
+	modelName := strings.TrimSpace(req.Model)
+	if modelName == "" {
+		modelName = strings.TrimSpace(conversation.ModelName)
+	}
+	if modelName == "" {
+		common.ApiErrorMsg(c, "model is required")
+		return
+	}
+	group := strings.TrimSpace(req.Group)
+	if group == "" {
+		group = strings.TrimSpace(conversation.Group)
+	}
+
+	storedMessages, err := model.ListChatMessages(userId, conversationId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	userMessage := &model.ChatMessage{
+		Role:      model.ChatMessageRoleUser,
+		Content:   content,
+		ModelName: modelName,
+	}
+	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{userMessage}); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	_ = model.TouchChatConversation(userId, conversationId, modelName, group)
+
+	stream := true
+	responseBody, _, err := callChatCompletionRelayStream(c, &chatCompletionRelayRequest{
+		Model:       modelName,
+		Group:       group,
+		Messages:    chatMessagesForCompletion(storedMessages, content),
+		Stream:      &stream,
+		MaxTokens:   req.MaxTokens,
+		Temperature: req.Temperature,
+		TopP:        req.TopP,
+	})
+	if err != nil {
+		return
+	}
+
+	streamResult := parseChatStreamCapture(responseBody)
+	if streamResult.Content == "" {
+		return
+	}
+	assistantModel := streamResult.Model
+	if assistantModel == "" {
+		assistantModel = modelName
+	}
+	assistantMessage := &model.ChatMessage{
+		Role:             model.ChatMessageRoleAssistant,
+		Content:          streamResult.Content,
+		ModelName:        assistantModel,
+		PromptTokens:     streamResult.Usage.PromptTokens,
+		CompletionTokens: streamResult.Usage.CompletionTokens,
+	}
+	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{assistantMessage}); err != nil {
+		common.SysError("save stream chat message error: " + err.Error())
+		return
+	}
+	if err := model.TouchChatConversation(userId, conversationId, assistantModel, group); err != nil {
+		common.SysError("touch stream chat conversation error: " + err.Error())
+	}
 }
 
 func CreateChatConversation(c *gin.Context) {

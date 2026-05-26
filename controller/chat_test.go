@@ -52,3 +52,21 @@ func TestChatRelayErrorMessage(t *testing.T) {
 		t.Fatalf("plain chatRelayErrorMessage = %q, want plain failure", got)
 	}
 }
+
+func TestParseChatStreamCapture(t *testing.T) {
+	streamBody := []byte("" +
+		"data: {\"model\":\"test-model\",\"choices\":[{\"delta\":{\"content\":\"hel\"}}]}\n\n" +
+		"data: {\"choices\":[{\"delta\":{\"content\":\"lo\"}}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2,\"total_tokens\":5}}\n\n" +
+		"data: [DONE]\n\n")
+
+	result := parseChatStreamCapture(streamBody)
+	if result.Content != "hello" {
+		t.Fatalf("stream content = %q, want hello", result.Content)
+	}
+	if result.Model != "test-model" {
+		t.Fatalf("stream model = %q, want test-model", result.Model)
+	}
+	if result.Usage.PromptTokens != 3 || result.Usage.CompletionTokens != 2 || result.Usage.TotalTokens != 5 {
+		t.Fatalf("stream usage = %#v", result.Usage)
+	}
+}
