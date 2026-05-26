@@ -63,10 +63,26 @@ func TestParseChatStreamCapture(t *testing.T) {
 	if result.Content != "hello" {
 		t.Fatalf("stream content = %q, want hello", result.Content)
 	}
+	if !result.Done {
+		t.Fatal("stream done = false, want true")
+	}
 	if result.Model != "test-model" {
 		t.Fatalf("stream model = %q, want test-model", result.Model)
 	}
 	if result.Usage.PromptTokens != 3 || result.Usage.CompletionTokens != 2 || result.Usage.TotalTokens != 5 {
 		t.Fatalf("stream usage = %#v", result.Usage)
+	}
+}
+
+func TestParseChatStreamCaptureWithoutDone(t *testing.T) {
+	streamBody := []byte("" +
+		"data: {\"model\":\"test-model\",\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n")
+
+	result := parseChatStreamCapture(streamBody)
+	if result.Content != "partial" {
+		t.Fatalf("stream content = %q, want partial", result.Content)
+	}
+	if result.Done {
+		t.Fatal("stream done = true, want false")
 	}
 }

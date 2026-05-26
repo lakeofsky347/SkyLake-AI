@@ -71,7 +71,9 @@ export async function deleteChatConversation(
 export async function getChatMessages(
   conversationId: number
 ): Promise<ApiResponse<ChatMessage[]>> {
-  const res = await api.get(`/api/chat/conversations/${conversationId}/messages`)
+  const res = await api.get(
+    `/api/chat/conversations/${conversationId}/messages`
+  )
   return res.data
 }
 
@@ -79,9 +81,12 @@ export async function appendChatMessages(
   conversationId: number,
   messages: ChatMessagePayload[]
 ): Promise<ApiResponse<ChatMessage[]>> {
-  const res = await api.post(`/api/chat/conversations/${conversationId}/messages`, {
-    messages,
-  })
+  const res = await api.post(
+    `/api/chat/conversations/${conversationId}/messages`,
+    {
+      messages,
+    }
+  )
   return res.data
 }
 
@@ -144,7 +149,8 @@ function readStreamEventData(event: string): string[] {
 export async function streamChatMessage(
   conversationId: number,
   payload: ChatSendPayload,
-  onDelta: (delta: string) => void
+  onDelta: (delta: string) => void,
+  signal?: AbortSignal
 ): Promise<string> {
   const response = await fetch(
     `/api/chat/conversations/${conversationId}/stream`,
@@ -156,6 +162,7 @@ export async function streamChatMessage(
         Accept: 'text/event-stream',
       },
       body: JSON.stringify(payload),
+      signal,
     }
   )
 

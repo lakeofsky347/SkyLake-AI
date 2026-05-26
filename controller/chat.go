@@ -91,6 +91,7 @@ type chatStreamCaptureResult struct {
 	Content string
 	Model   string
 	Usage   chatMessageUsage
+	Done    bool
 }
 
 func parseChatConversationId(c *gin.Context) (int, bool) {
@@ -334,7 +335,11 @@ func parseChatStreamCapture(data []byte) chatStreamCaptureResult {
 			continue
 		}
 		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if payload == "" || payload == "[DONE]" {
+		if payload == "" {
+			continue
+		}
+		if payload == "[DONE]" {
+			result.Done = true
 			continue
 		}
 
@@ -451,6 +456,9 @@ func StreamChatMessage(c *gin.Context) {
 	}
 
 	streamResult := parseChatStreamCapture(responseBody)
+	if !streamResult.Done || c.Request.Context().Err() != nil {
+		return
+	}
 	if streamResult.Content == "" {
 		return
 	}

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Bot,
@@ -24,20 +24,18 @@ import {
   MessageSquare,
   Plus,
   Send,
+  Square,
   Trash2,
   User,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Markdown } from '@/components/ui/markdown'
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '@/components/ui/native-select'
-import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
+import { Markdown } from '@/components/ui/markdown'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+import { Textarea } from '@/components/ui/textarea'
 import { getUserGroups, getUserModels } from '@/features/playground/api'
 import {
   createChatConversation,
@@ -102,7 +100,7 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
         {message.role === 'assistant' ? (
           <Markdown className='prose-p:my-0'>{message.content}</Markdown>
         ) : (
-          <div className='whitespace-pre-wrap break-words'>
+          <div className='break-words whitespace-pre-wrap'>
             {message.content}
           </div>
         )}
@@ -128,6 +126,7 @@ export function ChatApp() {
   const [selectedGroup, setSelectedGroup] = useState('')
   const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([])
   const [isSending, setIsSending] = useState(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const conversationsQuery = useQuery({
     queryKey: CHAT_CONVERSATIONS_QUERY_KEY,
@@ -276,6 +275,10 @@ export function ChatApp() {
     })
   }
 
+  function handleStopGenerating() {
+    abortControllerRef.current?.abort()
+  }
+
   async function handleSend() {
     const content = input.trim()
     if (!content || isSending) return
@@ -285,6 +288,8 @@ export function ChatApp() {
     }
 
     setIsSending(true)
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
     setInput('')
     const thinkingText = t('Thinking...')
     const userMessage = createPendingMessage('user', content, selectedModel)
@@ -316,11 +321,20 @@ export function ChatApp() {
                 : message
             )
           )
-        }
+        },
+        abortController.signal
       )
       setPendingMessages([])
       await refreshChatData(conversation.id)
     } catch (error) {
+      const aborted = error instanceof Error && error.name === 'AbortError'
+      if (aborted) {
+        setPendingMessages([])
+        if (conversationIdForRefresh !== null) {
+          await refreshChatData(conversationIdForRefresh)
+        }
+        return
+      }
       const errorMessage = error instanceof Error ? error.message : ''
       const message =
         errorMessage && errorMessage !== 'Failed to send message'
@@ -332,6 +346,7 @@ export function ChatApp() {
         await refreshChatData(conversationIdForRefresh)
       }
     } finally {
+      abortControllerRef.current = null
       setIsSending(false)
     }
   }
@@ -503,17 +518,20 @@ export function ChatApp() {
               <p className='text-muted-foreground text-xs'>
                 {t('Enter to send, Shift+Enter for a new line')}
               </p>
-              <Button
-                onClick={handleSend}
-                disabled={isSending || !input.trim() || !selectedModel}
-              >
-                {isSending ? (
-                  <Loader2 className='size-4 animate-spin' />
-                ) : (
+              {isSending ? (
+                <Button variant='outline' onClick={handleStopGenerating}>
+                  <Square className='size-4 fill-current' />
+                  {t('Stop')}
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleSend}
+                  disabled={!input.trim() || !selectedModel}
+                >
                   <Send className='size-4' />
-                )}
-                {t('Send')}
-              </Button>
+                  {t('Send')}
+                </Button>
+              )}
             </div>
           </div>
         </div>
