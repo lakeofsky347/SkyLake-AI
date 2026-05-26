@@ -60,10 +60,26 @@ export type ChatConversationPayload = {
 }
 
 export type ChatMessagePayload = {
-  role: ChatRole
+  role: 'user'
   content: string
   model?: string
-  prompt_tokens?: number
-  completion_tokens?: number
-  quota?: number
+}
+
+export type ChatSendPayload = {
+  content: string
+  model: string
+  group?: string
+}
+
+export type ChatMessageUsage = {
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+}
+
+export type ChatSendResponse = {
+  conversation: ChatConversation
+  user_message: ChatMessage
+  assistant_message: ChatMessage
+  usage: ChatMessageUsage
 }

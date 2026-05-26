@@ -38,18 +38,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { getUserGroups, getUserModels } from '@/features/playground/api'
 import {
-  getUserGroups,
-  getUserModels,
-  sendChatCompletion,
-} from '@/features/playground/api'
-import type { ChatCompletionMessage } from '@/features/playground/types'
-import {
-  appendChatMessages,
   createChatConversation,
   deleteChatConversation,
   getChatConversations,
   getChatMessages,
+  sendChatMessage,
   updateChatConversation,
 } from './api'
 import type { ChatConversation, ChatMessage, ChatRole } from './types'
@@ -59,15 +54,6 @@ const CHAT_CONVERSATIONS_QUERY_KEY = ['chat', 'conversations'] as const
 function buildChatTitle(content: string) {
   const title = content.replace(/\s+/g, ' ').trim()
   return title.length > 48 ? `${title.slice(0, 48)}...` : title || 'New chat'
-}
-
-function toCompletionMessages(messages: ChatMessage[]): ChatCompletionMessage[] {
-  return messages
-    .filter((message) => message.role !== 'system' || message.content.trim())
-    .map((message) => ({
-      role: message.role,
-      content: message.content,
-    }))
 }
 
 function createPendingMessage(
@@ -308,50 +294,27 @@ export function ChatApp() {
     )
     setPendingMessages([userMessage, assistantPlaceholder])
 
+    let conversationIdForRefresh = activeConversationId
     try {
       const conversation = await ensureConversation(content)
-      await appendChatMessages(conversation.id, [
-        {
-          role: 'user',
-          content,
-          model: selectedModel,
-        },
-      ])
-
-      const completionMessages = toCompletionMessages([
-        ...storedMessages,
-        userMessage,
-      ])
-      const completion = await sendChatCompletion({
+      conversationIdForRefresh = conversation.id
+      const response = await sendChatMessage(conversation.id, {
+        content,
         model: selectedModel,
         group: selectedGroup || undefined,
-        messages: completionMessages,
-        stream: false,
       })
-      const assistantContent =
-        completion.choices?.[0]?.message?.content?.trim() ?? ''
-      if (!assistantContent) {
-        throw new Error(t('The model returned an empty response.'))
+      if (!response.success || !response.data) {
+        throw new Error(response.message || t('Failed to send message'))
       }
-
-      await appendChatMessages(conversation.id, [
-        {
-          role: 'assistant',
-          content: assistantContent,
-          model: completion.model || selectedModel,
-          prompt_tokens: completion.usage?.prompt_tokens ?? 0,
-          completion_tokens: completion.usage?.completion_tokens ?? 0,
-        },
-      ])
       setPendingMessages([])
-      await refreshChatData(conversation.id)
+      await refreshChatData(response.data.conversation.id)
     } catch (error) {
       const message =
         error instanceof Error ? error.message : t('Failed to send message')
       toast.error(message)
       setPendingMessages([])
-      if (activeConversationId !== null) {
-        await refreshChatData(activeConversationId)
+      if (conversationIdForRefresh !== null) {
+        await refreshChatData(conversationIdForRefresh)
       }
     } finally {
       setIsSending(false)

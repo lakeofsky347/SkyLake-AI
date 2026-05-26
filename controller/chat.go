@@ -1,11 +1,18 @@
 package controller
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -34,6 +41,43 @@ type chatMessageRequest struct {
 
 type appendChatMessagesRequest struct {
 	Messages []chatMessageRequest `json:"messages"`
+}
+
+type sendChatMessageRequest struct {
+	Content     string   `json:"content"`
+	Model       string   `json:"model"`
+	Group       string   `json:"group"`
+	MaxTokens   *uint    `json:"max_tokens,omitempty"`
+	Temperature *float64 `json:"temperature,omitempty"`
+	TopP        *float64 `json:"top_p,omitempty"`
+}
+
+type sendChatMessageResponse struct {
+	Conversation     *model.ChatConversation `json:"conversation"`
+	UserMessage      *model.ChatMessage      `json:"user_message"`
+	AssistantMessage *model.ChatMessage      `json:"assistant_message"`
+	Usage            chatMessageUsage        `json:"usage"`
+}
+
+type chatMessageUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
+type chatCompletionRelayRequest struct {
+	Model       string        `json:"model,omitempty"`
+	Group       string        `json:"group,omitempty"`
+	Messages    []dto.Message `json:"messages,omitempty"`
+	Stream      *bool         `json:"stream,omitempty"`
+	MaxTokens   *uint         `json:"max_tokens,omitempty"`
+	Temperature *float64      `json:"temperature,omitempty"`
+	TopP        *float64      `json:"top_p,omitempty"`
+}
+
+type chatRelayErrorResponse struct {
+	Message string `json:"message"`
+	Error   any    `json:"error"`
 }
 
 func parseChatConversationId(c *gin.Context) (int, bool) {
@@ -69,6 +113,138 @@ func ensureChatConversationOwned(userId int, conversationId int) (*model.ChatCon
 		return nil, false, nil
 	}
 	return nil, false, err
+}
+
+func validateChatContent(c *gin.Context, content string) bool {
+	if content == "" {
+		common.ApiErrorMsg(c, "message content cannot be empty")
+		return false
+	}
+	if len([]rune(content)) > chatMaxMessageChars {
+		common.ApiErrorMsg(c, "message content is too long")
+		return false
+	}
+	return true
+}
+
+func chatMessagesForCompletion(storedMessages []*model.ChatMessage, userContent string) []dto.Message {
+	messages := make([]dto.Message, 0, len(storedMessages)+1)
+	for _, message := range storedMessages {
+		role := strings.TrimSpace(message.Role)
+		content := strings.TrimSpace(message.Content)
+		if content == "" || !model.IsValidChatMessageRole(role) {
+			continue
+		}
+		messages = append(messages, dto.Message{
+			Role:    role,
+			Content: content,
+		})
+	}
+	messages = append(messages, dto.Message{
+		Role:    model.ChatMessageRoleUser,
+		Content: userContent,
+	})
+	return messages
+}
+
+func chatCompletionContentToString(content any) string {
+	switch value := content.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(value)
+	default:
+		data, err := common.Marshal(value)
+		if err != nil {
+			return strings.TrimSpace(common.Interface2String(value))
+		}
+		return strings.TrimSpace(string(data))
+	}
+}
+
+func chatRelayErrorMessage(body []byte) string {
+	var response chatRelayErrorResponse
+	if err := common.Unmarshal(body, &response); err == nil {
+		if response.Message != "" {
+			return response.Message
+		}
+		switch value := response.Error.(type) {
+		case string:
+			if strings.TrimSpace(value) != "" {
+				return strings.TrimSpace(value)
+			}
+		case map[string]any:
+			if message := common.Interface2String(value["message"]); strings.TrimSpace(message) != "" {
+				return strings.TrimSpace(message)
+			}
+		}
+	}
+	if message := strings.TrimSpace(string(body)); message != "" {
+		return message
+	}
+	return "chat completion failed"
+}
+
+func copyChatRelayContext(source *gin.Context) gin.HandlerFunc {
+	return func(target *gin.Context) {
+		keys := []constant.ContextKey{
+			constant.ContextKeyUserId,
+			constant.ContextKeyUserName,
+			constant.ContextKeyUserGroup,
+			constant.ContextKeyUsingGroup,
+			constant.ContextKeyLanguage,
+		}
+		for _, key := range keys {
+			if value, exists := source.Get(string(key)); exists {
+				target.Set(string(key), value)
+			}
+		}
+		for _, key := range []string{"role", "use_access_token"} {
+			if value, exists := source.Get(key); exists {
+				target.Set(key, value)
+			}
+		}
+		target.Next()
+	}
+}
+
+func callChatCompletionRelay(c *gin.Context, request *chatCompletionRelayRequest) (*dto.OpenAITextResponse, error) {
+	requestBody, err := common.Marshal(request)
+	if err != nil {
+		return nil, err
+	}
+
+	relayRequest := httptest.NewRequest(http.MethodPost, "/pg/chat/completions", bytes.NewReader(requestBody))
+	relayRequest.Header = c.Request.Header.Clone()
+	relayRequest.Header.Set("Content-Type", "application/json")
+	relayRequest.Header.Set("Accept", "application/json")
+	relayRequest.ContentLength = int64(len(requestBody))
+
+	recorder := httptest.NewRecorder()
+	router := gin.New()
+	router.Use(middleware.BodyStorageCleanup())
+	playgroundRoute := router.Group("/pg")
+	playgroundRoute.Use(middleware.RouteTag("relay"))
+	playgroundRoute.Use(middleware.SystemPerformanceCheck())
+	playgroundRoute.Use(copyChatRelayContext(c), middleware.Distribute())
+	playgroundRoute.POST("/chat/completions", Playground)
+	router.ServeHTTP(recorder, relayRequest)
+
+	result := recorder.Result()
+	defer result.Body.Close()
+	responseBody := recorder.Body.Bytes()
+	if result.StatusCode < http.StatusOK || result.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("%s", chatRelayErrorMessage(responseBody))
+	}
+
+	var completion dto.OpenAITextResponse
+	if err := common.Unmarshal(responseBody, &completion); err != nil {
+		return nil, err
+	}
+	if openAIError := completion.GetOpenAIError(); openAIError != nil {
+		return nil, fmt.Errorf("%s", openAIError.Message)
+	}
+	return &completion, nil
 }
 
 func ListChatConversations(c *gin.Context) {
@@ -225,7 +401,6 @@ func AppendChatMessages(c *gin.Context) {
 
 	messages := make([]*model.ChatMessage, 0, len(req.Messages))
 	var latestModel string
-	var latestGroup string
 	for _, item := range req.Messages {
 		role := strings.TrimSpace(item.Role)
 		content := strings.TrimSpace(item.Content)
@@ -233,12 +408,11 @@ func AppendChatMessages(c *gin.Context) {
 			common.ApiErrorMsg(c, "invalid message role")
 			return
 		}
-		if content == "" {
-			common.ApiErrorMsg(c, "message content cannot be empty")
+		if role != model.ChatMessageRoleUser {
+			common.ApiErrorMsg(c, "only user messages can be appended directly")
 			return
 		}
-		if len([]rune(content)) > chatMaxMessageChars {
-			common.ApiErrorMsg(c, "message content is too long")
+		if !validateChatContent(c, content) {
 			return
 		}
 		modelName := strings.TrimSpace(item.Model)
@@ -246,12 +420,9 @@ func AppendChatMessages(c *gin.Context) {
 			latestModel = modelName
 		}
 		messages = append(messages, &model.ChatMessage{
-			Role:             role,
-			Content:          content,
-			ModelName:        modelName,
-			PromptTokens:     item.PromptTokens,
-			CompletionTokens: item.CompletionTokens,
-			Quota:            item.Quota,
+			Role:      role,
+			Content:   content,
+			ModelName: modelName,
 		})
 	}
 
@@ -259,6 +430,122 @@ func AppendChatMessages(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	_ = model.TouchChatConversation(userId, conversationId, latestModel, latestGroup)
+	_ = model.TouchChatConversation(userId, conversationId, latestModel, "")
 	common.ApiSuccess(c, messages)
+}
+
+func SendChatMessage(c *gin.Context) {
+	userId := c.GetInt("id")
+	conversationId, ok := parseChatConversationId(c)
+	if !ok {
+		return
+	}
+	conversation, owned, err := ensureChatConversationOwned(userId, conversationId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if !owned {
+		common.ApiErrorMsg(c, "conversation not found")
+		return
+	}
+
+	var req sendChatMessageRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorMsg(c, "invalid request body")
+		return
+	}
+
+	content := strings.TrimSpace(req.Content)
+	if !validateChatContent(c, content) {
+		return
+	}
+	modelName := strings.TrimSpace(req.Model)
+	if modelName == "" {
+		modelName = strings.TrimSpace(conversation.ModelName)
+	}
+	if modelName == "" {
+		common.ApiErrorMsg(c, "model is required")
+		return
+	}
+	group := strings.TrimSpace(req.Group)
+	if group == "" {
+		group = strings.TrimSpace(conversation.Group)
+	}
+
+	storedMessages, err := model.ListChatMessages(userId, conversationId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	userMessage := &model.ChatMessage{
+		Role:      model.ChatMessageRoleUser,
+		Content:   content,
+		ModelName: modelName,
+	}
+	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{userMessage}); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	_ = model.TouchChatConversation(userId, conversationId, modelName, group)
+
+	stream := false
+	completion, err := callChatCompletionRelay(c, &chatCompletionRelayRequest{
+		Model:       modelName,
+		Group:       group,
+		Messages:    chatMessagesForCompletion(storedMessages, content),
+		Stream:      &stream,
+		MaxTokens:   req.MaxTokens,
+		Temperature: req.Temperature,
+		TopP:        req.TopP,
+	})
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	if len(completion.Choices) == 0 {
+		common.ApiErrorMsg(c, "the model returned no choices")
+		return
+	}
+
+	assistantContent := chatCompletionContentToString(completion.Choices[0].Message.Content)
+	if assistantContent == "" {
+		common.ApiErrorMsg(c, "the model returned an empty response")
+		return
+	}
+	assistantModel := strings.TrimSpace(completion.Model)
+	if assistantModel == "" {
+		assistantModel = modelName
+	}
+	assistantMessage := &model.ChatMessage{
+		Role:             model.ChatMessageRoleAssistant,
+		Content:          assistantContent,
+		ModelName:        assistantModel,
+		PromptTokens:     completion.Usage.PromptTokens,
+		CompletionTokens: completion.Usage.CompletionTokens,
+	}
+	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{assistantMessage}); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.TouchChatConversation(userId, conversationId, assistantModel, group); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	conversation, err = model.GetChatConversationById(userId, conversationId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	common.ApiSuccess(c, sendChatMessageResponse{
+		Conversation:     conversation,
+		UserMessage:      userMessage,
+		AssistantMessage: assistantMessage,
+		Usage: chatMessageUsage{
+			PromptTokens:     completion.Usage.PromptTokens,
+			CompletionTokens: completion.Usage.CompletionTokens,
+			TotalTokens:      completion.Usage.TotalTokens,
+		},
+	})
 }

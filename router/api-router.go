@@ -289,6 +289,7 @@ func SetApiRouter(router *gin.Engine) {
 			chatRoute.DELETE("/conversations/:id", controller.DeleteChatConversation)
 			chatRoute.GET("/conversations/:id/messages", controller.ListChatMessages)
 			chatRoute.POST("/conversations/:id/messages", controller.AppendChatMessages)
+			chatRoute.POST("/conversations/:id/send", controller.SendChatMessage)
 		}
 
 		usageRoute := apiRouter.Group("/usage")

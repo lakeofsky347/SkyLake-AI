@@ -24,6 +24,8 @@ import type {
   ChatConversationPayload,
   ChatMessage,
   ChatMessagePayload,
+  ChatSendPayload,
+  ChatSendResponse,
 } from './types'
 
 export async function getChatConversations(): Promise<
@@ -69,5 +71,16 @@ export async function appendChatMessages(
   const res = await api.post(`/api/chat/conversations/${conversationId}/messages`, {
     messages,
   })
+  return res.data
+}
+
+export async function sendChatMessage(
+  conversationId: number,
+  payload: ChatSendPayload
+): Promise<ApiResponse<ChatSendResponse>> {
+  const res = await api.post(
+    `/api/chat/conversations/${conversationId}/send`,
+    payload
+  )
   return res.data
 }
