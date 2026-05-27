@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -22,6 +23,8 @@ const (
 	chatDefaultPageSize = 30
 	chatMaxPageSize     = 100
 	chatMaxMessageChars = 128 * 1024
+	chatMaxContentParts = 16
+	chatMaxPartsBytes   = 60 * 1024
 )
 
 type chatConversationRequest struct {
@@ -33,6 +36,7 @@ type chatConversationRequest struct {
 type chatMessageRequest struct {
 	Role             string `json:"role"`
 	Content          string `json:"content"`
+	ContentParts     []chatMessageContentPartRequest `json:"content_parts,omitempty"`
 	Model            string `json:"model"`
 	PromptTokens     int    `json:"prompt_tokens"`
 	CompletionTokens int    `json:"completion_tokens"`
@@ -44,12 +48,13 @@ type appendChatMessagesRequest struct {
 }
 
 type sendChatMessageRequest struct {
-	Content     string   `json:"content"`
-	Model       string   `json:"model"`
-	Group       string   `json:"group"`
-	MaxTokens   *uint    `json:"max_tokens,omitempty"`
-	Temperature *float64 `json:"temperature,omitempty"`
-	TopP        *float64 `json:"top_p,omitempty"`
+	Content      string                          `json:"content"`
+	ContentParts []chatMessageContentPartRequest `json:"content_parts,omitempty"`
+	Model        string                          `json:"model"`
+	Group        string                          `json:"group"`
+	MaxTokens    *uint                           `json:"max_tokens,omitempty"`
+	Temperature  *float64                        `json:"temperature,omitempty"`
+	TopP         *float64                        `json:"top_p,omitempty"`
 }
 
 type sendChatMessageResponse struct {
@@ -63,6 +68,17 @@ type chatMessageUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+}
+
+type chatMessageContentPartRequest struct {
+	Type     string                          `json:"type"`
+	Text     string                          `json:"text,omitempty"`
+	ImageURL *chatMessageImageURLPartRequest `json:"image_url,omitempty"`
+}
+
+type chatMessageImageURLPartRequest struct {
+	URL    string `json:"url"`
+	Detail string `json:"detail,omitempty"`
 }
 
 type chatCompletionRelayRequest struct {
@@ -129,24 +145,147 @@ func ensureChatConversationOwned(userId int, conversationId int) (*model.ChatCon
 	return nil, false, err
 }
 
-func validateChatContent(c *gin.Context, content string) bool {
-	if content == "" {
-		common.ApiErrorMsg(c, "message content cannot be empty")
+func isValidChatImageURL(rawURL string) bool {
+	parsed, err := url.ParseRequestURI(rawURL)
+	if err != nil {
 		return false
 	}
-	if len([]rune(content)) > chatMaxMessageChars {
-		common.ApiErrorMsg(c, "message content is too long")
-		return false
-	}
-	return true
+	return parsed.Scheme == "http" || parsed.Scheme == "https"
 }
 
-func chatMessagesForCompletion(storedMessages []*model.ChatMessage, userContent string) []dto.Message {
+func appendChatTextPart(parts []dto.MediaContent, text string) []dto.MediaContent {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return parts
+	}
+	return append(parts, dto.MediaContent{
+		Type: dto.ContentTypeText,
+		Text: text,
+	})
+}
+
+func chatImageURLPart(rawURL string, detail string) dto.MediaContent {
+	image := map[string]any{
+		"url": strings.TrimSpace(rawURL),
+	}
+	if strings.TrimSpace(detail) != "" {
+		image["detail"] = strings.TrimSpace(detail)
+	}
+	return dto.MediaContent{
+		Type:     dto.ContentTypeImageURL,
+		ImageUrl: image,
+	}
+}
+
+func normalizeChatMessageContent(content string, rawParts []chatMessageContentPartRequest) (string, []dto.MediaContent, string, error) {
+	content = strings.TrimSpace(content)
+	if len(rawParts) == 0 {
+		if len([]rune(content)) > chatMaxMessageChars {
+			return "", nil, "", fmt.Errorf("message content is too long")
+		}
+		if content == "" {
+			return "", nil, "", fmt.Errorf("message content cannot be empty")
+		}
+		return content, nil, "", nil
+	}
+	if len(rawParts) > chatMaxContentParts {
+		return "", nil, "", fmt.Errorf("too many content parts")
+	}
+
+	parts := make([]dto.MediaContent, 0, len(rawParts)+1)
+	hasText := false
+	hasMedia := false
+	var textSummary strings.Builder
+	for _, rawPart := range rawParts {
+		switch strings.TrimSpace(rawPart.Type) {
+		case dto.ContentTypeText:
+			text := strings.TrimSpace(rawPart.Text)
+			if text == "" {
+				continue
+			}
+			hasText = true
+			if textSummary.Len() > 0 {
+				textSummary.WriteString("\n")
+			}
+			textSummary.WriteString(text)
+			parts = appendChatTextPart(parts, text)
+		case dto.ContentTypeImageURL:
+			if rawPart.ImageURL == nil {
+				return "", nil, "", fmt.Errorf("image URL is required")
+			}
+			imageURL := strings.TrimSpace(rawPart.ImageURL.URL)
+			if !isValidChatImageURL(imageURL) {
+				return "", nil, "", fmt.Errorf("image URL must start with http or https")
+			}
+			hasMedia = true
+			parts = append(parts, chatImageURLPart(imageURL, rawPart.ImageURL.Detail))
+		default:
+			return "", nil, "", fmt.Errorf("unsupported content part type")
+		}
+	}
+
+	if content != "" && !hasText {
+		parts = append([]dto.MediaContent{{
+			Type: dto.ContentTypeText,
+			Text: content,
+		}}, parts...)
+		textSummary.WriteString(content)
+		hasText = true
+	}
+
+	summary := strings.TrimSpace(textSummary.String())
+	if summary == "" && hasMedia {
+		summary = "[Image]"
+	}
+	if len([]rune(summary)) > chatMaxMessageChars {
+		return "", nil, "", fmt.Errorf("message content is too long")
+	}
+	if summary == "" || len(parts) == 0 {
+		return "", nil, "", fmt.Errorf("message content cannot be empty")
+	}
+
+	if !hasMedia {
+		return summary, nil, "", nil
+	}
+	data, err := common.Marshal(parts)
+	if err != nil {
+		return "", nil, "", err
+	}
+	if len(data) > chatMaxPartsBytes {
+		return "", nil, "", fmt.Errorf("content parts are too large")
+	}
+	return summary, parts, string(data), nil
+}
+
+func parseStoredChatContentParts(raw string) []dto.MediaContent {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var parts []dto.MediaContent
+	if err := common.UnmarshalJsonStr(raw, &parts); err != nil {
+		return nil
+	}
+	return parts
+}
+
+func chatMessageContentForCompletion(message *model.ChatMessage) any {
+	parts := parseStoredChatContentParts(message.ContentParts)
+	if len(parts) > 0 {
+		return parts
+	}
+	return strings.TrimSpace(message.Content)
+}
+
+func chatMessagesForCompletion(storedMessages []*model.ChatMessage, userContent string, userContentParts []dto.MediaContent) []dto.Message {
 	messages := make([]dto.Message, 0, len(storedMessages)+1)
 	for _, message := range storedMessages {
 		role := strings.TrimSpace(message.Role)
-		content := strings.TrimSpace(message.Content)
-		if content == "" || !model.IsValidChatMessageRole(role) {
+		content := chatMessageContentForCompletion(message)
+		if !model.IsValidChatMessageRole(role) {
+			continue
+		}
+		if contentText, ok := content.(string); ok && contentText == "" {
 			continue
 		}
 		messages = append(messages, dto.Message{
@@ -154,9 +293,13 @@ func chatMessagesForCompletion(storedMessages []*model.ChatMessage, userContent 
 			Content: content,
 		})
 	}
+	content := any(userContent)
+	if len(userContentParts) > 0 {
+		content = userContentParts
+	}
 	messages = append(messages, dto.Message{
 		Role:    model.ChatMessageRoleUser,
-		Content: userContent,
+		Content: content,
 	})
 	return messages
 }
@@ -408,8 +551,9 @@ func StreamChatMessage(c *gin.Context) {
 		return
 	}
 
-	content := strings.TrimSpace(req.Content)
-	if !validateChatContent(c, content) {
+	content, contentParts, contentPartsJSON, err := normalizeChatMessageContent(req.Content, req.ContentParts)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
 		return
 	}
 	modelName := strings.TrimSpace(req.Model)
@@ -431,9 +575,10 @@ func StreamChatMessage(c *gin.Context) {
 		return
 	}
 	userMessage := &model.ChatMessage{
-		Role:      model.ChatMessageRoleUser,
-		Content:   content,
-		ModelName: modelName,
+		Role:         model.ChatMessageRoleUser,
+		Content:      content,
+		ContentParts: contentPartsJSON,
+		ModelName:    modelName,
 	}
 	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{userMessage}); err != nil {
 		common.ApiError(c, err)
@@ -445,7 +590,7 @@ func StreamChatMessage(c *gin.Context) {
 	responseBody, _, err := callChatCompletionRelayStream(c, &chatCompletionRelayRequest{
 		Model:       modelName,
 		Group:       group,
-		Messages:    chatMessagesForCompletion(storedMessages, content),
+		Messages:    chatMessagesForCompletion(storedMessages, content, contentParts),
 		Stream:      &stream,
 		MaxTokens:   req.MaxTokens,
 		Temperature: req.Temperature,
@@ -617,7 +762,6 @@ func AppendChatMessages(c *gin.Context) {
 	var latestModel string
 	for _, item := range req.Messages {
 		role := strings.TrimSpace(item.Role)
-		content := strings.TrimSpace(item.Content)
 		if !model.IsValidChatMessageRole(role) {
 			common.ApiErrorMsg(c, "invalid message role")
 			return
@@ -626,7 +770,9 @@ func AppendChatMessages(c *gin.Context) {
 			common.ApiErrorMsg(c, "only user messages can be appended directly")
 			return
 		}
-		if !validateChatContent(c, content) {
+		content, _, contentPartsJSON, err := normalizeChatMessageContent(item.Content, item.ContentParts)
+		if err != nil {
+			common.ApiErrorMsg(c, err.Error())
 			return
 		}
 		modelName := strings.TrimSpace(item.Model)
@@ -634,9 +780,10 @@ func AppendChatMessages(c *gin.Context) {
 			latestModel = modelName
 		}
 		messages = append(messages, &model.ChatMessage{
-			Role:      role,
-			Content:   content,
-			ModelName: modelName,
+			Role:         role,
+			Content:      content,
+			ContentParts: contentPartsJSON,
+			ModelName:    modelName,
 		})
 	}
 
@@ -670,8 +817,9 @@ func SendChatMessage(c *gin.Context) {
 		return
 	}
 
-	content := strings.TrimSpace(req.Content)
-	if !validateChatContent(c, content) {
+	content, contentParts, contentPartsJSON, err := normalizeChatMessageContent(req.Content, req.ContentParts)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
 		return
 	}
 	modelName := strings.TrimSpace(req.Model)
@@ -693,9 +841,10 @@ func SendChatMessage(c *gin.Context) {
 		return
 	}
 	userMessage := &model.ChatMessage{
-		Role:      model.ChatMessageRoleUser,
-		Content:   content,
-		ModelName: modelName,
+		Role:         model.ChatMessageRoleUser,
+		Content:      content,
+		ContentParts: contentPartsJSON,
+		ModelName:    modelName,
 	}
 	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{userMessage}); err != nil {
 		common.ApiError(c, err)
@@ -707,7 +856,7 @@ func SendChatMessage(c *gin.Context) {
 	completion, err := callChatCompletionRelay(c, &chatCompletionRelayRequest{
 		Model:       modelName,
 		Group:       group,
-		Messages:    chatMessagesForCompletion(storedMessages, content),
+		Messages:    chatMessagesForCompletion(storedMessages, content, contentParts),
 		Stream:      &stream,
 		MaxTokens:   req.MaxTokens,
 		Temperature: req.Temperature,

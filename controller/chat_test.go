@@ -3,6 +3,7 @@ package controller
 import (
 	"testing"
 
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 )
 
@@ -14,7 +15,7 @@ func TestChatMessagesForCompletion(t *testing.T) {
 		{Role: model.ChatMessageRoleUser, Content: "   "},
 	}
 
-	messages := chatMessagesForCompletion(storedMessages, "hello")
+	messages := chatMessagesForCompletion(storedMessages, "hello", nil)
 	if len(messages) != 3 {
 		t.Fatalf("len(messages) = %d, want 3", len(messages))
 	}
@@ -26,6 +27,76 @@ func TestChatMessagesForCompletion(t *testing.T) {
 	}
 	if messages[2].Role != model.ChatMessageRoleUser || messages[2].Content != "hello" {
 		t.Fatalf("last message = %#v", messages[2])
+	}
+}
+
+func TestChatMessagesForCompletionWithStoredParts(t *testing.T) {
+	_, _, partsJSON, err := normalizeChatMessageContent("describe this", []chatMessageContentPartRequest{
+		{
+			Type: dto.ContentTypeText,
+			Text: "describe this",
+		},
+		{
+			Type: dto.ContentTypeImageURL,
+			ImageURL: &chatMessageImageURLPartRequest{
+				URL: "https://example.com/image.png",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("normalizeChatMessageContent error = %v", err)
+	}
+
+	messages := chatMessagesForCompletion([]*model.ChatMessage{
+		{Role: model.ChatMessageRoleUser, Content: "describe this", ContentParts: partsJSON},
+	}, "next", nil)
+	if len(messages) != 2 {
+		t.Fatalf("len(messages) = %d, want 2", len(messages))
+	}
+	parts, ok := messages[0].Content.([]dto.MediaContent)
+	if !ok {
+		t.Fatalf("stored content type = %T, want []dto.MediaContent", messages[0].Content)
+	}
+	if len(parts) != 2 || parts[0].Type != dto.ContentTypeText || parts[1].Type != dto.ContentTypeImageURL {
+		t.Fatalf("stored content parts = %#v", parts)
+	}
+}
+
+func TestNormalizeChatMessageContentWithImageURL(t *testing.T) {
+	summary, parts, partsJSON, err := normalizeChatMessageContent("  describe this  ", []chatMessageContentPartRequest{
+		{
+			Type: dto.ContentTypeImageURL,
+			ImageURL: &chatMessageImageURLPartRequest{
+				URL:    "https://example.com/image.png",
+				Detail: "high",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("normalizeChatMessageContent error = %v", err)
+	}
+	if summary != "describe this" {
+		t.Fatalf("summary = %q, want describe this", summary)
+	}
+	if len(parts) != 2 {
+		t.Fatalf("len(parts) = %d, want 2", len(parts))
+	}
+	if partsJSON == "" {
+		t.Fatal("partsJSON is empty")
+	}
+}
+
+func TestNormalizeChatMessageContentRejectsInvalidImageURL(t *testing.T) {
+	_, _, _, err := normalizeChatMessageContent("", []chatMessageContentPartRequest{
+		{
+			Type: dto.ContentTypeImageURL,
+			ImageURL: &chatMessageImageURLPartRequest{
+				URL: "file:///tmp/image.png",
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("normalizeChatMessageContent error = nil, want error")
 	}
 }
 

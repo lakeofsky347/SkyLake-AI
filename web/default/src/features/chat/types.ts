@@ -19,6 +19,19 @@ For commercial licensing, please contact support@quantumnous.com
 
 export type ChatRole = 'system' | 'user' | 'assistant'
 
+export type ChatMessageContentPart =
+  | {
+      type: 'text'
+      text: string
+    }
+  | {
+      type: 'image_url'
+      image_url: {
+        url: string
+        detail?: string
+      }
+    }
+
 export type ChatConversation = {
   id: number
   user_id: number
@@ -35,6 +48,7 @@ export type ChatMessage = {
   user_id: number
   role: ChatRole
   content: string
+  content_parts?: string
   model_name: string
   prompt_tokens: number
   completion_tokens: number
@@ -62,11 +76,13 @@ export type ChatConversationPayload = {
 export type ChatMessagePayload = {
   role: 'user'
   content: string
+  content_parts?: ChatMessageContentPart[]
   model?: string
 }
 
 export type ChatSendPayload = {
   content: string
+  content_parts?: ChatMessageContentPart[]
   model: string
   group?: string
 }

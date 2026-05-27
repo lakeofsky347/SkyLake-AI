@@ -30,6 +30,7 @@ type ChatMessage struct {
 	UserId           int            `json:"user_id" gorm:"index"`
 	Role             string         `json:"role" gorm:"type:varchar(32);index"`
 	Content          string         `json:"content" gorm:"type:text"`
+	ContentParts     string         `json:"content_parts,omitempty" gorm:"type:text"`
 	ModelName        string         `json:"model_name" gorm:"type:varchar(128);default:'';index"`
 	PromptTokens     int            `json:"prompt_tokens" gorm:"default:0"`
 	CompletionTokens int            `json:"completion_tokens" gorm:"default:0"`

@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Bot,
+  ImageIcon,
   Loader2,
   MessageSquare,
   Plus,
@@ -27,6 +28,7 @@ import {
   Square,
   Trash2,
   User,
+  X,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -45,9 +47,19 @@ import {
   streamChatMessage,
   updateChatConversation,
 } from './api'
-import type { ChatConversation, ChatMessage, ChatRole } from './types'
+import type {
+  ChatConversation,
+  ChatMessage,
+  ChatMessageContentPart,
+  ChatRole,
+} from './types'
 
 const CHAT_CONVERSATIONS_QUERY_KEY = ['chat', 'conversations'] as const
+
+type ChatImageAttachment = {
+  id: string
+  url: string
+}
 
 function buildChatTitle(content: string) {
   const title = content.replace(/\s+/g, ' ').trim()
@@ -57,7 +69,8 @@ function buildChatTitle(content: string) {
 function createPendingMessage(
   role: ChatRole,
   content: string,
-  model: string
+  model: string,
+  contentParts?: ChatMessageContentPart[]
 ): ChatMessage {
   return {
     id: -Date.now() - (role === 'assistant' ? 1 : 0),
@@ -65,6 +78,7 @@ function createPendingMessage(
     user_id: 0,
     role,
     content,
+    content_parts: contentParts ? JSON.stringify(contentParts) : undefined,
     model_name: model,
     prompt_tokens: 0,
     completion_tokens: 0,
@@ -73,9 +87,69 @@ function createPendingMessage(
   }
 }
 
+function isValidImageUrl(value: string) {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function buildChatContentParts(
+  content: string,
+  attachments: ChatImageAttachment[]
+): ChatMessageContentPart[] | undefined {
+  if (attachments.length === 0) return undefined
+  const parts: ChatMessageContentPart[] = []
+  const text = content.trim()
+  if (text) {
+    parts.push({
+      type: 'text',
+      text,
+    })
+  }
+  for (const attachment of attachments) {
+    parts.push({
+      type: 'image_url',
+      image_url: {
+        url: attachment.url,
+        detail: 'high',
+      },
+    })
+  }
+  return parts
+}
+
+function parseChatContentParts(message: ChatMessage): ChatMessageContentPart[] {
+  if (!message.content_parts) return []
+  try {
+    const parts = JSON.parse(message.content_parts) as ChatMessageContentPart[]
+    return Array.isArray(parts) ? parts : []
+  } catch {
+    return []
+  }
+}
+
 function ChatMessageBubble({ message }: { message: ChatMessage }) {
+  const { t } = useTranslation()
   const isUser = message.role === 'user'
   const Icon = isUser ? User : Bot
+  const contentParts = parseChatContentParts(message)
+  const imageParts: Extract<ChatMessageContentPart, { type: 'image_url' }>[] =
+    []
+  const textParts: string[] = []
+  for (const part of contentParts) {
+    if (part.type === 'text') {
+      textParts.push(part.text)
+    } else if (part.type === 'image_url') {
+      imageParts.push(part)
+    }
+  }
+  const textContent =
+    contentParts.length > 0
+      ? textParts.filter(Boolean).join('\n\n')
+      : message.content
 
   return (
     <div
@@ -97,11 +171,28 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
             : 'bg-muted text-foreground'
         )}
       >
-        {message.role === 'assistant' ? (
-          <Markdown className='prose-p:my-0'>{message.content}</Markdown>
-        ) : (
-          <div className='break-words whitespace-pre-wrap'>
-            {message.content}
+        {textContent &&
+          (message.role === 'assistant' ? (
+            <Markdown className='prose-p:my-0'>{textContent}</Markdown>
+          ) : (
+            <div className='break-words whitespace-pre-wrap'>{textContent}</div>
+          ))}
+        {imageParts.length > 0 && (
+          <div className={cn('grid gap-2', textContent && 'mt-2')}>
+            {imageParts.map((part, index) => (
+              <a
+                key={`${part.image_url.url}-${index}`}
+                href={part.image_url.url}
+                rel='noreferrer'
+                target='_blank'
+              >
+                <img
+                  alt={t('Image')}
+                  className='max-h-64 w-full rounded-md object-cover'
+                  src={part.image_url.url}
+                />
+              </a>
+            ))}
           </div>
         )}
       </div>
@@ -125,6 +216,11 @@ export function ChatApp() {
   const [selectedModel, setSelectedModel] = useState('')
   const [selectedGroup, setSelectedGroup] = useState('')
   const [pendingMessages, setPendingMessages] = useState<ChatMessage[]>([])
+  const [imageAttachments, setImageAttachments] = useState<
+    ChatImageAttachment[]
+  >([])
+  const [imageUrlInput, setImageUrlInput] = useState('')
+  const [isImageUrlOpen, setIsImageUrlOpen] = useState(false)
   const [isSending, setIsSending] = useState(false)
   const abortControllerRef = useRef<AbortController | null>(null)
 
@@ -168,6 +264,8 @@ export function ChatApp() {
     () => [...storedMessages, ...pendingMessages],
     [pendingMessages, storedMessages]
   )
+  const hasDraft = input.trim() !== '' || imageAttachments.length > 0
+  const canAddImageUrl = isValidImageUrl(imageUrlInput.trim())
 
   useEffect(() => {
     if (activeConversationId === null && conversations.length > 0) {
@@ -255,6 +353,9 @@ export function ChatApp() {
     setActiveConversationId(response.data.id)
     setInput('')
     setPendingMessages([])
+    setImageAttachments([])
+    setImageUrlInput('')
+    setIsImageUrlOpen(false)
     await queryClient.invalidateQueries({
       queryKey: CHAT_CONVERSATIONS_QUERY_KEY,
     })
@@ -269,10 +370,33 @@ export function ChatApp() {
     if (activeConversationId === conversation.id) {
       setActiveConversationId(null)
       setPendingMessages([])
+      setImageAttachments([])
+      setImageUrlInput('')
+      setIsImageUrlOpen(false)
     }
     await queryClient.invalidateQueries({
       queryKey: CHAT_CONVERSATIONS_QUERY_KEY,
     })
+  }
+
+  function handleAddImageUrl() {
+    const url = imageUrlInput.trim()
+    if (!isValidImageUrl(url)) return
+    setImageAttachments((attachments) => [
+      ...attachments,
+      {
+        id: `${Date.now()}-${attachments.length}`,
+        url,
+      },
+    ])
+    setImageUrlInput('')
+    setIsImageUrlOpen(false)
+  }
+
+  function handleRemoveImageAttachment(id: string) {
+    setImageAttachments((attachments) =>
+      attachments.filter((attachment) => attachment.id !== id)
+    )
   }
 
   function handleStopGenerating() {
@@ -281,18 +405,28 @@ export function ChatApp() {
 
   async function handleSend() {
     const content = input.trim()
-    if (!content || isSending) return
+    if ((!content && imageAttachments.length === 0) || isSending) return
     if (!selectedModel) {
       toast.error(t('Select a model before sending.'))
       return
     }
 
+    const attachmentsForRequest = imageAttachments
+    const contentParts = buildChatContentParts(content, attachmentsForRequest)
     setIsSending(true)
     const abortController = new AbortController()
     abortControllerRef.current = abortController
     setInput('')
+    setImageAttachments([])
+    setImageUrlInput('')
+    setIsImageUrlOpen(false)
     const thinkingText = t('Thinking...')
-    const userMessage = createPendingMessage('user', content, selectedModel)
+    const userMessage = createPendingMessage(
+      'user',
+      content || t('Image'),
+      selectedModel,
+      contentParts
+    )
     const assistantPlaceholder = createPendingMessage(
       'assistant',
       thinkingText,
@@ -302,13 +436,14 @@ export function ChatApp() {
 
     let conversationIdForRefresh = activeConversationId
     try {
-      const conversation = await ensureConversation(content)
+      const conversation = await ensureConversation(content || t('Image'))
       conversationIdForRefresh = conversation.id
       let streamedContent = ''
       await streamChatMessage(
         conversation.id,
         {
           content,
+          content_parts: contentParts,
           model: selectedModel,
           group: selectedGroup || undefined,
         },
@@ -396,6 +531,9 @@ export function ChatApp() {
                     onClick={() => {
                       setActiveConversationId(conversation.id)
                       setPendingMessages([])
+                      setImageAttachments([])
+                      setImageUrlInput('')
+                      setIsImageUrlOpen(false)
                     }}
                   >
                     <p className='truncate text-sm font-medium'>
@@ -501,6 +639,62 @@ export function ChatApp() {
 
         <div className='border-border bg-background border-t p-3'>
           <div className='mx-auto flex max-w-5xl flex-col gap-2'>
+            {imageAttachments.length > 0 && (
+              <div className='flex flex-wrap gap-2'>
+                {imageAttachments.map((attachment) => (
+                  <div
+                    key={attachment.id}
+                    className='border-border bg-muted/40 flex max-w-full items-center gap-2 rounded-lg border px-2 py-1 text-xs'
+                  >
+                    <ImageIcon className='text-muted-foreground size-3.5' />
+                    <span className='max-w-56 truncate'>{attachment.url}</span>
+                    <Button
+                      aria-label={t('Remove')}
+                      onClick={() => handleRemoveImageAttachment(attachment.id)}
+                      size='icon-xs'
+                      variant='ghost'
+                    >
+                      <X className='size-3' />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {isImageUrlOpen && (
+              <div className='flex flex-col gap-2 sm:flex-row'>
+                <Input
+                  disabled={isSending}
+                  onChange={(event) => setImageUrlInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      handleAddImageUrl()
+                    }
+                  }}
+                  placeholder={`${t('Image')} ${t('URL')}`}
+                  type='url'
+                  value={imageUrlInput}
+                />
+                <div className='flex gap-2'>
+                  <Button
+                    disabled={!canAddImageUrl || isSending}
+                    onClick={handleAddImageUrl}
+                    variant='outline'
+                  >
+                    {t('Add')}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setImageUrlInput('')
+                      setIsImageUrlOpen(false)
+                    }}
+                    variant='ghost'
+                  >
+                    {t('Cancel')}
+                  </Button>
+                </div>
+              </div>
+            )}
             <Textarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
@@ -518,20 +712,30 @@ export function ChatApp() {
               <p className='text-muted-foreground text-xs'>
                 {t('Enter to send, Shift+Enter for a new line')}
               </p>
-              {isSending ? (
-                <Button variant='outline' onClick={handleStopGenerating}>
-                  <Square className='size-4 fill-current' />
-                  {t('Stop')}
-                </Button>
-              ) : (
+              <div className='flex items-center gap-2'>
                 <Button
-                  onClick={handleSend}
-                  disabled={!input.trim() || !selectedModel}
+                  disabled={isSending}
+                  onClick={() => setIsImageUrlOpen((value) => !value)}
+                  variant='outline'
                 >
-                  <Send className='size-4' />
-                  {t('Send')}
+                  <ImageIcon className='size-4' />
+                  {t('Attach')}
                 </Button>
-              )}
+                {isSending ? (
+                  <Button variant='outline' onClick={handleStopGenerating}>
+                    <Square className='size-4 fill-current' />
+                    {t('Stop')}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleSend}
+                    disabled={!hasDraft || !selectedModel}
+                  >
+                    <Send className='size-4' />
+                    {t('Send')}
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </div>
