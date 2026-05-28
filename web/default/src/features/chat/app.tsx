@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Bot,
@@ -45,6 +45,7 @@ import {
   getChatConversations,
   getChatMessages,
   streamChatMessage,
+  uploadChatAttachment,
   updateChatConversation,
 } from './api'
 import type {
@@ -55,10 +56,12 @@ import type {
 } from './types'
 
 const CHAT_CONVERSATIONS_QUERY_KEY = ['chat', 'conversations'] as const
+const CHAT_MAX_IMAGE_ATTACHMENTS = 8
 
 type ChatImageAttachment = {
   id: string
   url: string
+  fileName?: string
 }
 
 function buildChatTitle(content: string) {
@@ -221,8 +224,10 @@ export function ChatApp() {
   >([])
   const [imageUrlInput, setImageUrlInput] = useState('')
   const [isImageUrlOpen, setIsImageUrlOpen] = useState(false)
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false)
   const [isSending, setIsSending] = useState(false)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const conversationsQuery = useQuery({
     queryKey: CHAT_CONVERSATIONS_QUERY_KEY,
@@ -382,6 +387,10 @@ export function ChatApp() {
   function handleAddImageUrl() {
     const url = imageUrlInput.trim()
     if (!isValidImageUrl(url)) return
+    if (imageAttachments.length >= CHAT_MAX_IMAGE_ATTACHMENTS) {
+      toast.error(t('Too many files. Some were not added.'))
+      return
+    }
     setImageAttachments((attachments) => [
       ...attachments,
       {
@@ -397,6 +406,50 @@ export function ChatApp() {
     setImageAttachments((attachments) =>
       attachments.filter((attachment) => attachment.id !== id)
     )
+  }
+
+  async function handleUploadImageFiles(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.currentTarget.files ?? [])
+    event.currentTarget.value = ''
+    if (files.length === 0) return
+
+    const capacity = CHAT_MAX_IMAGE_ATTACHMENTS - imageAttachments.length
+    if (capacity <= 0) {
+      toast.error(t('Too many files. Some were not added.'))
+      return
+    }
+    const selectedFiles = files.slice(0, capacity)
+    if (selectedFiles.length < files.length) {
+      toast.error(t('Too many files. Some were not added.'))
+    }
+
+    setIsUploadingAttachment(true)
+    try {
+      const conversation = await ensureConversation(input.trim() || t('Image'))
+      const uploadedAttachments: ChatImageAttachment[] = []
+      for (const file of selectedFiles) {
+        const response = await uploadChatAttachment(conversation.id, file)
+        if (!response.success || !response.data) {
+          throw new Error(response.message || t('Failed to load image'))
+        }
+        uploadedAttachments.push({
+          id: String(response.data.id),
+          url: response.data.public_url,
+          fileName: response.data.file_name,
+        })
+      }
+      setImageAttachments((attachments) =>
+        attachments.concat(uploadedAttachments)
+      )
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : t('Failed to load image')
+      toast.error(message)
+    } finally {
+      setIsUploadingAttachment(false)
+    }
   }
 
   function handleStopGenerating() {
@@ -639,6 +692,14 @@ export function ChatApp() {
 
         <div className='border-border bg-background border-t p-3'>
           <div className='mx-auto flex max-w-5xl flex-col gap-2'>
+            <input
+              ref={fileInputRef}
+              accept='image/png,image/jpeg,image/webp,image/gif'
+              className='hidden'
+              multiple
+              onChange={handleUploadImageFiles}
+              type='file'
+            />
             {imageAttachments.length > 0 && (
               <div className='flex flex-wrap gap-2'>
                 {imageAttachments.map((attachment) => (
@@ -647,7 +708,9 @@ export function ChatApp() {
                     className='border-border bg-muted/40 flex max-w-full items-center gap-2 rounded-lg border px-2 py-1 text-xs'
                   >
                     <ImageIcon className='text-muted-foreground size-3.5' />
-                    <span className='max-w-56 truncate'>{attachment.url}</span>
+                    <span className='max-w-56 truncate'>
+                      {attachment.fileName || attachment.url}
+                    </span>
                     <Button
                       aria-label={t('Remove')}
                       onClick={() => handleRemoveImageAttachment(attachment.id)}
@@ -714,12 +777,23 @@ export function ChatApp() {
               </p>
               <div className='flex items-center gap-2'>
                 <Button
-                  disabled={isSending}
+                  disabled={isSending || isUploadingAttachment}
+                  onClick={() => fileInputRef.current?.click()}
+                  variant='outline'
+                >
+                  {isUploadingAttachment ? (
+                    <Loader2 className='size-4 animate-spin' />
+                  ) : (
+                    <ImageIcon className='size-4' />
+                  )}
+                  {t('Upload photo')}
+                </Button>
+                <Button
+                  disabled={isSending || isUploadingAttachment}
                   onClick={() => setIsImageUrlOpen((value) => !value)}
                   variant='outline'
                 >
-                  <ImageIcon className='size-4' />
-                  {t('Attach')}
+                  {t('URL')}
                 </Button>
                 {isSending ? (
                   <Button variant='outline' onClick={handleStopGenerating}>
@@ -729,7 +803,9 @@ export function ChatApp() {
                 ) : (
                   <Button
                     onClick={handleSend}
-                    disabled={!hasDraft || !selectedModel}
+                    disabled={
+                      !hasDraft || !selectedModel || isUploadingAttachment
+                    }
                   >
                     <Send className='size-4' />
                     {t('Send')}

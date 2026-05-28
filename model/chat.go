@@ -125,8 +125,12 @@ func DeleteChatConversation(userId int, conversationId int) error {
 			Delete(&ChatConversation{}).Error; err != nil {
 			return err
 		}
+		if err := tx.Where("conversation_id = ? AND user_id = ?", conversationId, userId).
+			Delete(&ChatMessage{}).Error; err != nil {
+			return err
+		}
 		return tx.Where("conversation_id = ? AND user_id = ?", conversationId, userId).
-			Delete(&ChatMessage{}).Error
+			Delete(&ChatAttachment{}).Error
 	})
 }
 

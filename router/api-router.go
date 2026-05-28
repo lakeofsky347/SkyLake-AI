@@ -280,6 +280,8 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.POST("/batch/keys", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetTokenKeysBatch)
 		}
 
+		apiRouter.GET("/chat/attachments/:key", controller.GetChatAttachmentContent)
+
 		chatRoute := apiRouter.Group("/chat")
 		chatRoute.Use(middleware.UserAuth())
 		{
@@ -287,6 +289,7 @@ func SetApiRouter(router *gin.Engine) {
 			chatRoute.POST("/conversations", controller.CreateChatConversation)
 			chatRoute.PATCH("/conversations/:id", controller.UpdateChatConversation)
 			chatRoute.DELETE("/conversations/:id", controller.DeleteChatConversation)
+			chatRoute.POST("/conversations/:id/attachments", controller.UploadChatAttachment)
 			chatRoute.GET("/conversations/:id/messages", controller.ListChatMessages)
 			chatRoute.POST("/conversations/:id/messages", controller.AppendChatMessages)
 			chatRoute.POST("/conversations/:id/send", controller.SendChatMessage)

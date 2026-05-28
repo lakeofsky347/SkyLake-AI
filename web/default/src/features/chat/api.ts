@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { api, getCommonHeaders } from '@/lib/api'
 import type {
   ApiResponse,
+  ChatAttachment,
   ChatConversation,
   ChatConversationList,
   ChatConversationPayload,
@@ -86,6 +87,19 @@ export async function appendChatMessages(
     {
       messages,
     }
+  )
+  return res.data
+}
+
+export async function uploadChatAttachment(
+  conversationId: number,
+  file: File
+): Promise<ApiResponse<ChatAttachment>> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await api.post(
+    `/api/chat/conversations/${conversationId}/attachments`,
+    formData
   )
   return res.data
 }

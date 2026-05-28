@@ -56,6 +56,19 @@ export type ChatMessage = {
   created_at: number
 }
 
+export type ChatAttachment = {
+  id: number
+  user_id: number
+  conversation_id: number
+  message_id: number
+  storage_key: string
+  file_name: string
+  mime_type: string
+  size: number
+  public_url: string
+  created_at: number
+}
+
 export type ApiResponse<T> = {
   success: boolean
   message?: string

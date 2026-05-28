@@ -584,6 +584,7 @@ func StreamChatMessage(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	bindChatMessageAttachments(userId, conversationId, userMessage, contentParts)
 	_ = model.TouchChatConversation(userId, conversationId, modelName, group)
 
 	stream := true
@@ -701,10 +702,16 @@ func DeleteChatConversation(c *gin.Context) {
 		return
 	}
 
+	attachments, err := model.ListChatAttachments(userId, conversationId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	if err := model.DeleteChatConversation(userId, conversationId); err != nil {
 		common.ApiError(c, err)
 		return
 	}
+	removeChatAttachmentFiles(attachments)
 	common.ApiSuccess(c, nil)
 }
 
@@ -759,6 +766,7 @@ func AppendChatMessages(c *gin.Context) {
 	}
 
 	messages := make([]*model.ChatMessage, 0, len(req.Messages))
+	messageContentParts := make([][]dto.MediaContent, 0, len(req.Messages))
 	var latestModel string
 	for _, item := range req.Messages {
 		role := strings.TrimSpace(item.Role)
@@ -770,7 +778,7 @@ func AppendChatMessages(c *gin.Context) {
 			common.ApiErrorMsg(c, "only user messages can be appended directly")
 			return
 		}
-		content, _, contentPartsJSON, err := normalizeChatMessageContent(item.Content, item.ContentParts)
+		content, contentParts, contentPartsJSON, err := normalizeChatMessageContent(item.Content, item.ContentParts)
 		if err != nil {
 			common.ApiErrorMsg(c, err.Error())
 			return
@@ -785,11 +793,15 @@ func AppendChatMessages(c *gin.Context) {
 			ContentParts: contentPartsJSON,
 			ModelName:    modelName,
 		})
+		messageContentParts = append(messageContentParts, contentParts)
 	}
 
 	if err := model.CreateChatMessages(userId, conversationId, messages); err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	for index, message := range messages {
+		bindChatMessageAttachments(userId, conversationId, message, messageContentParts[index])
 	}
 	_ = model.TouchChatConversation(userId, conversationId, latestModel, "")
 	common.ApiSuccess(c, messages)
@@ -850,6 +862,7 @@ func SendChatMessage(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	bindChatMessageAttachments(userId, conversationId, userMessage, contentParts)
 	_ = model.TouchChatConversation(userId, conversationId, modelName, group)
 
 	stream := false
