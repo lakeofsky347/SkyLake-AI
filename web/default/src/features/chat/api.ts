@@ -104,6 +104,25 @@ export async function uploadChatAttachment(
   return res.data
 }
 
+export async function getPendingChatAttachments(
+  conversationId: number
+): Promise<ApiResponse<ChatAttachment[]>> {
+  const res = await api.get(
+    `/api/chat/conversations/${conversationId}/attachments`
+  )
+  return res.data
+}
+
+export async function deleteChatAttachment(
+  conversationId: number,
+  attachmentId: number
+): Promise<ApiResponse<null>> {
+  const res = await api.delete(
+    `/api/chat/conversations/${conversationId}/attachments/${attachmentId}`
+  )
+  return res.data
+}
+
 export async function sendChatMessage(
   conversationId: number,
   payload: ChatSendPayload

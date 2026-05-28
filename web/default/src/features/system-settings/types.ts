@@ -128,6 +128,11 @@ export type ContentSettings = {
   DataExportDefaultTime: string
   DataExportInterval: number
   Chats: string
+  'chat_attachment.local_dir': string
+  'chat_attachment.public_base_url': string
+  'chat_attachment.max_image_file_size_mb': number
+  'chat_attachment.max_image_count': number
+  'chat_attachment.allowed_image_mime_types': string
   DrawingEnabled: boolean
   MjNotifyEnabled: boolean
   MjAccountFilterEnabled: boolean

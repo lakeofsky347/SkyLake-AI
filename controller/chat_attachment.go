@@ -3,12 +3,14 @@ package controller
 import (
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -55,6 +57,45 @@ func bindChatMessageAttachments(userId int, conversationId int, message *model.C
 	}
 }
 
+func cleanupUnusedPendingChatAttachments(userId int, conversationId int, parts []dto.MediaContent) {
+	attachments, err := model.ListPendingChatAttachments(userId, conversationId)
+	if err != nil {
+		common.SysError("list pending chat attachments error: " + err.Error())
+		return
+	}
+	if len(attachments) == 0 {
+		return
+	}
+
+	keepURLs := make(map[string]struct{}, len(parts))
+	for _, url := range chatContentPartImageURLs(parts) {
+		trimmedURL := strings.TrimSpace(url)
+		if trimmedURL == "" {
+			continue
+		}
+		keepURLs[trimmedURL] = struct{}{}
+	}
+
+	removable := make([]*model.ChatAttachment, 0, len(attachments))
+	removableIDs := make([]int, 0, len(attachments))
+	for _, attachment := range attachments {
+		if _, ok := keepURLs[strings.TrimSpace(attachment.PublicURL)]; ok {
+			continue
+		}
+		removable = append(removable, attachment)
+		removableIDs = append(removableIDs, attachment.Id)
+	}
+	if len(removableIDs) == 0 {
+		return
+	}
+
+	if err := model.DeleteChatAttachmentsByIds(userId, conversationId, removableIDs); err != nil {
+		common.SysError("delete pending chat attachments error: " + err.Error())
+		return
+	}
+	removeChatAttachmentFiles(removable)
+}
+
 func UploadChatAttachment(c *gin.Context) {
 	userId := c.GetInt("id")
 	if c.GetInt("role") < common.ImageUploadPermission {
@@ -72,6 +113,15 @@ func UploadChatAttachment(c *gin.Context) {
 		common.ApiErrorMsg(c, "conversation not found")
 		return
 	}
+	pendingCount, err := model.CountPendingChatAttachments(userId, conversationId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if pendingCount >= int64(system_setting.GetChatAttachmentMaxImageCount()) {
+		common.ApiErrorMsg(c, "too many pending chat attachments")
+		return
+	}
 
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
@@ -83,7 +133,7 @@ func UploadChatAttachment(c *gin.Context) {
 		common.ApiErrorMsg(c, "image file is empty")
 		return
 	}
-	if header.Size > service.ChatMaxImageFileSize {
+	if header.Size > service.GetChatAttachmentMaxImageFileSize() {
 		common.ApiErrorMsg(c, "image file is too large")
 		return
 	}
@@ -110,6 +160,68 @@ func UploadChatAttachment(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, attachment)
+}
+
+func ListPendingChatAttachments(c *gin.Context) {
+	userId := c.GetInt("id")
+	conversationId, ok := parseChatConversationId(c)
+	if !ok {
+		return
+	}
+	if _, owned, err := ensureChatConversationOwned(userId, conversationId); err != nil {
+		common.ApiError(c, err)
+		return
+	} else if !owned {
+		common.ApiErrorMsg(c, "conversation not found")
+		return
+	}
+
+	attachments, err := model.ListPendingChatAttachments(userId, conversationId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, attachments)
+}
+
+func DeleteChatAttachment(c *gin.Context) {
+	userId := c.GetInt("id")
+	conversationId, ok := parseChatConversationId(c)
+	if !ok {
+		return
+	}
+	if _, owned, err := ensureChatConversationOwned(userId, conversationId); err != nil {
+		common.ApiError(c, err)
+		return
+	} else if !owned {
+		common.ApiErrorMsg(c, "conversation not found")
+		return
+	}
+
+	attachmentId, err := strconv.Atoi(strings.TrimSpace(c.Param("attachmentId")))
+	if err != nil || attachmentId <= 0 {
+		common.ApiErrorMsg(c, "invalid attachment id")
+		return
+	}
+
+	attachment, err := model.GetChatAttachmentById(userId, conversationId, attachmentId)
+	if err != nil {
+		common.ApiErrorMsg(c, "attachment not found")
+		return
+	}
+	if attachment.MessageId != 0 {
+		common.ApiErrorMsg(c, "attachment already sent")
+		return
+	}
+
+	if err := model.DeleteChatAttachmentById(userId, conversationId, attachmentId); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := service.GetChatAttachmentStorage().Delete(attachment.StoragePath); err != nil {
+		common.SysError("remove chat attachment error: " + err.Error())
+	}
+	common.ApiSuccess(c, nil)
 }
 
 func GetChatAttachmentContent(c *gin.Context) {

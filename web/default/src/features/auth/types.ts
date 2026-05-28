@@ -127,6 +127,9 @@ export interface SystemStatus {
     oauth_register_enabled?: boolean
     register_enabled?: boolean
     password_register_enabled?: boolean
+    chat_attachment_max_image_count?: number
+    chat_attachment_max_image_file_size_bytes?: number
+    chat_attachment_allowed_image_mime_types?: string[]
     custom_oauth_providers?: CustomOAuthProviderInfo[]
     [key: string]: unknown
   }
@@ -169,6 +172,9 @@ export interface SystemStatus {
   oauth_register_enabled?: boolean
   register_enabled?: boolean
   password_register_enabled?: boolean
+  chat_attachment_max_image_count?: number
+  chat_attachment_max_image_file_size_bytes?: number
+  chat_attachment_allowed_image_mime_types?: string[]
   custom_oauth_providers?: CustomOAuthProviderInfo[]
   [key: string]: unknown
 }

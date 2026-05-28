@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -85,6 +86,9 @@ func GetStatus(c *gin.Context) {
 		"default_collapse_sidebar":      common.DefaultCollapseSidebar,
 		"mj_notify_enabled":             setting.MjNotifyEnabled,
 		"chats":                         setting.Chats,
+		"chat_attachment_max_image_count":           system_setting.GetChatAttachmentMaxImageCount(),
+		"chat_attachment_max_image_file_size_bytes": system_setting.GetChatAttachmentMaxImageFileSizeBytes(),
+		"chat_attachment_allowed_image_mime_types":  service.GetAllowedChatAttachmentImageMimeTypes(),
 		"demo_site_enabled":             operation_setting.DemoSiteEnabled,
 		"self_use_mode_enabled":         operation_setting.SelfUseModeEnabled,
 		"register_enabled":              common.RegisterEnabled,

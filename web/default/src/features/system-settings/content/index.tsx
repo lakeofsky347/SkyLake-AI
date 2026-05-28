@@ -39,6 +39,12 @@ const defaultContentSettings: ContentSettings = {
   DataExportDefaultTime: 'hour',
   DataExportInterval: 5,
   Chats: '[]',
+  'chat_attachment.local_dir': 'data/chat-attachments',
+  'chat_attachment.public_base_url': '',
+  'chat_attachment.max_image_file_size_mb': 10,
+  'chat_attachment.max_image_count': 8,
+  'chat_attachment.allowed_image_mime_types':
+    '["image/gif","image/jpeg","image/png","image/webp"]',
   DrawingEnabled: false,
   MjNotifyEnabled: false,
   MjAccountFilterEnabled: false,
@@ -117,6 +123,7 @@ export function ContentSettings() {
     | 'faq'
     | 'uptime-kuma'
     | 'chat'
+    | 'chat-attachments'
     | 'drawing'
   const sectionContent = getContentSectionContent(activeSection, settings)
 

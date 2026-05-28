@@ -14,15 +14,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const ChatMaxImageFileSize int64 = 10 * 1024 * 1024
+const chatAttachmentRoutePrefix = "/api/chat/attachments/"
 
-const chatAttachmentStorageDir = "data/chat-attachments"
-
-var chatAllowedImageTypes = map[string]string{
+var chatImageTypeExtensions = map[string]string{
 	"image/gif":  ".gif",
 	"image/jpeg": ".jpg",
 	"image/png":  ".png",
 	"image/webp": ".webp",
+}
+
+func defaultChatAttachmentImageMimeTypes() []string {
+	return []string{
+		"image/gif",
+		"image/jpeg",
+		"image/png",
+		"image/webp",
+	}
 }
 
 type ChatAttachmentFile interface {
@@ -51,16 +58,41 @@ type LocalChatAttachmentStorage struct {
 }
 
 func NewLocalChatAttachmentStorage() *LocalChatAttachmentStorage {
-	return &LocalChatAttachmentStorage{BaseDir: chatAttachmentStorageDir}
+	return &LocalChatAttachmentStorage{BaseDir: system_setting.GetChatAttachmentLocalDir()}
 }
 
 func GetChatAttachmentStorage() ChatAttachmentStorage {
 	return NewLocalChatAttachmentStorage()
 }
 
+func GetAllowedChatAttachmentImageMimeTypes() []string {
+	mimeTypes := make([]string, 0)
+	for _, mimeType := range system_setting.GetChatAttachmentAllowedImageMimeTypes() {
+		if _, ok := chatImageTypeExtensions[mimeType]; ok {
+			mimeTypes = append(mimeTypes, mimeType)
+		}
+	}
+	if len(mimeTypes) == 0 {
+		for _, mimeType := range defaultChatAttachmentImageMimeTypes() {
+			if _, ok := chatImageTypeExtensions[mimeType]; ok {
+				mimeTypes = append(mimeTypes, mimeType)
+			}
+		}
+	}
+	return mimeTypes
+}
+
+func GetChatAttachmentMaxImageFileSize() int64 {
+	return system_setting.GetChatAttachmentMaxImageFileSizeBytes()
+}
+
 func IsSupportedChatAttachmentImageType(mimeType string) bool {
-	_, ok := chatAllowedImageTypes[mimeType]
-	return ok
+	for _, allowedMimeType := range GetAllowedChatAttachmentImageMimeTypes() {
+		if mimeType == allowedMimeType {
+			return true
+		}
+	}
+	return false
 }
 
 func ValidChatAttachmentStorageKey(storageKey string) bool {
@@ -70,8 +102,12 @@ func ValidChatAttachmentStorageKey(storageKey string) bool {
 }
 
 func BuildChatAttachmentPublicURL(c *gin.Context, storageKey string) string {
-	path := "/api/chat/attachments/" + url.PathEscape(storageKey)
-	base := strings.TrimRight(system_setting.ServerAddress, "/")
+	path := chatAttachmentRoutePrefix + url.PathEscape(storageKey)
+	base := system_setting.GetChatAttachmentPublicBaseURL()
+	if base != "" {
+		return base + path
+	}
+	base = strings.TrimRight(system_setting.ServerAddress, "/")
 	if base != "" {
 		return base + path
 	}
@@ -105,7 +141,7 @@ func DetectChatAttachmentImageMimeType(file ChatAttachmentFile) (string, error) 
 }
 
 func createChatAttachmentStorageKey(mimeType string) (string, error) {
-	ext, ok := chatAllowedImageTypes[mimeType]
+	ext, ok := chatImageTypeExtensions[mimeType]
 	if !ok {
 		return "", fmt.Errorf("unsupported image type")
 	}
@@ -121,6 +157,7 @@ func (s *LocalChatAttachmentStorage) SaveImage(c *gin.Context, file ChatAttachme
 	if err != nil {
 		return nil, err
 	}
+	maxImageFileSize := GetChatAttachmentMaxImageFileSize()
 	if err := os.MkdirAll(s.BaseDir, 0755); err != nil {
 		return nil, err
 	}
@@ -135,12 +172,12 @@ func (s *LocalChatAttachmentStorage) SaveImage(c *gin.Context, file ChatAttachme
 	}
 	defer dst.Close()
 
-	written, err := io.Copy(dst, io.LimitReader(file, ChatMaxImageFileSize+1))
+	written, err := io.Copy(dst, io.LimitReader(file, maxImageFileSize+1))
 	if err != nil {
 		_ = os.Remove(storagePath)
 		return nil, err
 	}
-	if written > ChatMaxImageFileSize {
+	if written > maxImageFileSize {
 		_ = os.Remove(storagePath)
 		return nil, fmt.Errorf("image file is too large")
 	}

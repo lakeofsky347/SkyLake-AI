@@ -33,22 +33,27 @@ import {
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { useStatus } from '@/hooks/use-status'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Markdown } from '@/components/ui/markdown'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
+import type { SystemStatus } from '@/features/auth/types'
 import { getUserGroups, getUserModels } from '@/features/playground/api'
 import {
   createChatConversation,
+  deleteChatAttachment,
   deleteChatConversation,
   getChatConversations,
   getChatMessages,
+  getPendingChatAttachments,
   streamChatMessage,
   uploadChatAttachment,
   updateChatConversation,
 } from './api'
 import type {
+  ChatAttachment,
   ChatConversation,
   ChatMessage,
   ChatMessageContentPart,
@@ -56,17 +61,91 @@ import type {
 } from './types'
 
 const CHAT_CONVERSATIONS_QUERY_KEY = ['chat', 'conversations'] as const
-const CHAT_MAX_IMAGE_ATTACHMENTS = 8
+const CHAT_DEFAULT_ALLOWED_IMAGE_MIME_TYPES = [
+  'image/gif',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]
+const CHAT_DEFAULT_MAX_IMAGE_ATTACHMENTS = 8
+const CHAT_DEFAULT_MAX_IMAGE_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
 type ChatImageAttachment = {
   id: string
   url: string
   fileName?: string
+  source: 'uploaded' | 'external'
+}
+
+type ChatAttachmentClientConfig = {
+  allowedImageMimeTypes: string[]
+  maxImageAttachments: number
+  maxImageFileSizeBytes: number
+}
+
+function getStatusValue<T>(status: SystemStatus | null, key: string) {
+  const directValue = status?.[key]
+  if (directValue !== undefined) {
+    return directValue as T
+  }
+  const nestedValue = status?.data?.[key]
+  if (nestedValue !== undefined) {
+    return nestedValue as T
+  }
+  return undefined
+}
+
+function getChatAttachmentClientConfig(
+  status: SystemStatus | null
+): ChatAttachmentClientConfig {
+  const rawAllowedImageMimeTypes = getStatusValue<unknown>(
+    status,
+    'chat_attachment_allowed_image_mime_types'
+  )
+  const allowedImageMimeTypes = Array.isArray(rawAllowedImageMimeTypes)
+    ? rawAllowedImageMimeTypes
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : CHAT_DEFAULT_ALLOWED_IMAGE_MIME_TYPES
+
+  const rawMaxImageAttachments = Number(
+    getStatusValue(status, 'chat_attachment_max_image_count')
+  )
+  const rawMaxImageFileSizeBytes = Number(
+    getStatusValue(status, 'chat_attachment_max_image_file_size_bytes')
+  )
+
+  return {
+    allowedImageMimeTypes:
+      allowedImageMimeTypes.length > 0
+        ? allowedImageMimeTypes
+        : CHAT_DEFAULT_ALLOWED_IMAGE_MIME_TYPES,
+    maxImageAttachments:
+      Number.isFinite(rawMaxImageAttachments) && rawMaxImageAttachments > 0
+        ? Math.floor(rawMaxImageAttachments)
+        : CHAT_DEFAULT_MAX_IMAGE_ATTACHMENTS,
+    maxImageFileSizeBytes:
+      Number.isFinite(rawMaxImageFileSizeBytes) && rawMaxImageFileSizeBytes > 0
+        ? Math.floor(rawMaxImageFileSizeBytes)
+        : CHAT_DEFAULT_MAX_IMAGE_FILE_SIZE_BYTES,
+  }
 }
 
 function buildChatTitle(content: string) {
   const title = content.replace(/\s+/g, ' ').trim()
   return title.length > 48 ? `${title.slice(0, 48)}...` : title || 'New chat'
+}
+
+function mapChatAttachmentToImageAttachment(
+  attachment: ChatAttachment
+): ChatImageAttachment {
+  return {
+    id: String(attachment.id),
+    url: attachment.public_url,
+    fileName: attachment.file_name,
+    source: 'uploaded',
+  }
 }
 
 function createPendingMessage(
@@ -211,6 +290,7 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
 export function ChatApp() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { status } = useStatus()
   const [activeConversationId, setActiveConversationId] = useState<
     number | null
   >(null)
@@ -249,6 +329,10 @@ export function ChatApp() {
   const conversations = conversationsQuery.data?.data?.items ?? []
   const models = modelsQuery.data ?? []
   const groups = groupsQuery.data ?? []
+  const attachmentConfig = useMemo(
+    () => getChatAttachmentClientConfig(status),
+    [status]
+  )
 
   const activeConversation = useMemo(
     () =>
@@ -270,13 +354,42 @@ export function ChatApp() {
     [pendingMessages, storedMessages]
   )
   const hasDraft = input.trim() !== '' || imageAttachments.length > 0
-  const canAddImageUrl = isValidImageUrl(imageUrlInput.trim())
+  const canAttachMoreImages =
+    imageAttachments.length < attachmentConfig.maxImageAttachments
+  const canAddImageUrl =
+    isValidImageUrl(imageUrlInput.trim()) && canAttachMoreImages
 
   useEffect(() => {
     if (activeConversationId === null && conversations.length > 0) {
       setActiveConversationId(conversations[0].id)
     }
   }, [activeConversationId, conversations])
+
+  useEffect(() => {
+    if (activeConversationId === null) {
+      setImageAttachments([])
+      return
+    }
+
+    let cancelled = false
+    setImageAttachments([])
+
+    void (async () => {
+      const response = await getPendingChatAttachments(activeConversationId)
+      if (cancelled) return
+      if (!response.success) {
+        toast.error(response.message || t('Failed to load image attachments'))
+        return
+      }
+      setImageAttachments(
+        (response.data ?? []).map(mapChatAttachmentToImageAttachment)
+      )
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeConversationId, t])
 
   useEffect(() => {
     if (!activeConversation) return
@@ -387,7 +500,7 @@ export function ChatApp() {
   function handleAddImageUrl() {
     const url = imageUrlInput.trim()
     if (!isValidImageUrl(url)) return
-    if (imageAttachments.length >= CHAT_MAX_IMAGE_ATTACHMENTS) {
+    if (!canAttachMoreImages) {
       toast.error(t('Too many files. Some were not added.'))
       return
     }
@@ -396,15 +509,34 @@ export function ChatApp() {
       {
         id: `${Date.now()}-${attachments.length}`,
         url,
+        source: 'external',
       },
     ])
     setImageUrlInput('')
     setIsImageUrlOpen(false)
   }
 
-  function handleRemoveImageAttachment(id: string) {
+  async function handleRemoveImageAttachment(id: string) {
+    const attachment = imageAttachments.find((item) => item.id === id)
+    if (!attachment) return
+
+    if (
+      attachment.source === 'uploaded' &&
+      activeConversationId !== null &&
+      Number.isInteger(Number(attachment.id))
+    ) {
+      const response = await deleteChatAttachment(
+        activeConversationId,
+        Number(attachment.id)
+      )
+      if (!response.success) {
+        toast.error(response.message || t('Failed to remove image'))
+        return
+      }
+    }
+
     setImageAttachments((attachments) =>
-      attachments.filter((attachment) => attachment.id !== id)
+      attachments.filter((item) => item.id !== id)
     )
   }
 
@@ -413,13 +545,52 @@ export function ChatApp() {
     event.currentTarget.value = ''
     if (files.length === 0) return
 
-    const capacity = CHAT_MAX_IMAGE_ATTACHMENTS - imageAttachments.length
+    const capacity =
+      attachmentConfig.maxImageAttachments - imageAttachments.length
     if (capacity <= 0) {
       toast.error(t('Too many files. Some were not added.'))
       return
     }
-    const selectedFiles = files.slice(0, capacity)
-    if (selectedFiles.length < files.length) {
+
+    const validFiles = files.filter((file) => {
+      if (
+        file.type &&
+        !attachmentConfig.allowedImageMimeTypes.includes(file.type)
+      ) {
+        return false
+      }
+      if (file.size > attachmentConfig.maxImageFileSizeBytes) {
+        return false
+      }
+      return true
+    })
+
+    if (validFiles.length < files.length) {
+      if (
+        files.some(
+          (file) =>
+            !!file.type &&
+            !attachmentConfig.allowedImageMimeTypes.includes(file.type)
+        )
+      ) {
+        toast.error(
+          t(
+            'One or more files were skipped because their format is not allowed.'
+          )
+        )
+      }
+      if (
+        files.some((file) => file.size > attachmentConfig.maxImageFileSizeBytes)
+      ) {
+        toast.error(t('One or more files exceeded the size limit.'))
+      }
+    }
+
+    const selectedFiles = validFiles.slice(0, capacity)
+    if (selectedFiles.length === 0) {
+      return
+    }
+    if (selectedFiles.length < validFiles.length) {
       toast.error(t('Too many files. Some were not added.'))
     }
 
@@ -436,6 +607,7 @@ export function ChatApp() {
           id: String(response.data.id),
           url: response.data.public_url,
           fileName: response.data.file_name,
+          source: 'uploaded',
         })
       }
       setImageAttachments((attachments) =>
@@ -694,7 +866,7 @@ export function ChatApp() {
           <div className='mx-auto flex max-w-5xl flex-col gap-2'>
             <input
               ref={fileInputRef}
-              accept='image/png,image/jpeg,image/webp,image/gif'
+              accept={attachmentConfig.allowedImageMimeTypes.join(',')}
               className='hidden'
               multiple
               onChange={handleUploadImageFiles}
@@ -777,7 +949,9 @@ export function ChatApp() {
               </p>
               <div className='flex items-center gap-2'>
                 <Button
-                  disabled={isSending || isUploadingAttachment}
+                  disabled={
+                    isSending || isUploadingAttachment || !canAttachMoreImages
+                  }
                   onClick={() => fileInputRef.current?.click()}
                   variant='outline'
                 >
@@ -789,7 +963,9 @@ export function ChatApp() {
                   {t('Upload photo')}
                 </Button>
                 <Button
-                  disabled={isSending || isUploadingAttachment}
+                  disabled={
+                    isSending || isUploadingAttachment || !canAttachMoreImages
+                  }
                   onClick={() => setIsImageUrlOpen((value) => !value)}
                   variant='outline'
                 >

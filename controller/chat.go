@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -34,13 +35,13 @@ type chatConversationRequest struct {
 }
 
 type chatMessageRequest struct {
-	Role             string `json:"role"`
-	Content          string `json:"content"`
+	Role             string                          `json:"role"`
+	Content          string                          `json:"content"`
 	ContentParts     []chatMessageContentPartRequest `json:"content_parts,omitempty"`
-	Model            string `json:"model"`
-	PromptTokens     int    `json:"prompt_tokens"`
-	CompletionTokens int    `json:"completion_tokens"`
-	Quota            int    `json:"quota"`
+	Model            string                          `json:"model"`
+	PromptTokens     int                             `json:"prompt_tokens"`
+	CompletionTokens int                             `json:"completion_tokens"`
+	Quota            int                             `json:"quota"`
 }
 
 type appendChatMessagesRequest struct {
@@ -177,6 +178,16 @@ func chatImageURLPart(rawURL string, detail string) dto.MediaContent {
 	}
 }
 
+func countChatImageParts(parts []dto.MediaContent) int {
+	count := 0
+	for _, part := range parts {
+		if part.Type == dto.ContentTypeImageURL {
+			count++
+		}
+	}
+	return count
+}
+
 func normalizeChatMessageContent(content string, rawParts []chatMessageContentPartRequest) (string, []dto.MediaContent, string, error) {
 	content = strings.TrimSpace(content)
 	if len(rawParts) == 0 {
@@ -242,6 +253,12 @@ func normalizeChatMessageContent(content string, rawParts []chatMessageContentPa
 	}
 	if summary == "" || len(parts) == 0 {
 		return "", nil, "", fmt.Errorf("message content cannot be empty")
+	}
+	if len(parts) > chatMaxContentParts {
+		return "", nil, "", fmt.Errorf("too many content parts")
+	}
+	if countChatImageParts(parts) > system_setting.GetChatAttachmentMaxImageCount() {
+		return "", nil, "", fmt.Errorf("too many image attachments")
 	}
 
 	if !hasMedia {
@@ -585,6 +602,7 @@ func StreamChatMessage(c *gin.Context) {
 		return
 	}
 	bindChatMessageAttachments(userId, conversationId, userMessage, contentParts)
+	cleanupUnusedPendingChatAttachments(userId, conversationId, contentParts)
 	_ = model.TouchChatConversation(userId, conversationId, modelName, group)
 
 	stream := true
@@ -800,9 +818,12 @@ func AppendChatMessages(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	allContentParts := make([]dto.MediaContent, 0)
 	for index, message := range messages {
 		bindChatMessageAttachments(userId, conversationId, message, messageContentParts[index])
+		allContentParts = append(allContentParts, messageContentParts[index]...)
 	}
+	cleanupUnusedPendingChatAttachments(userId, conversationId, allContentParts)
 	_ = model.TouchChatConversation(userId, conversationId, latestModel, "")
 	common.ApiSuccess(c, messages)
 }
@@ -863,6 +884,7 @@ func SendChatMessage(c *gin.Context) {
 		return
 	}
 	bindChatMessageAttachments(userId, conversationId, userMessage, contentParts)
+	cleanupUnusedPendingChatAttachments(userId, conversationId, contentParts)
 	_ = model.TouchChatConversation(userId, conversationId, modelName, group)
 
 	stream := false

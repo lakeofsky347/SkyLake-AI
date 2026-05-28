@@ -20,6 +20,7 @@ import type { ContentSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 import { AnnouncementsSection } from './announcements-section'
 import { ApiInfoSection } from './api-info-section'
+import { ChatAttachmentSettingsSection } from './chat-attachment-settings-section'
 import { ChatSettingsSection } from './chat-settings-section'
 import { DashboardSection } from './dashboard-section'
 import { DrawingSettingsSection } from './drawing-settings-section'
@@ -104,6 +105,25 @@ const CONTENT_SECTIONS = [
     descriptionKey: 'Configure chat-related settings',
     build: (settings: ContentSettings) => (
       <ChatSettingsSection defaultValue={settings.Chats} />
+    ),
+  },
+  {
+    id: 'chat-attachments',
+    titleKey: 'Chat Attachments',
+    descriptionKey:
+      'Configure storage and public URL behavior for uploaded chat images.',
+    build: (settings: ContentSettings) => (
+      <ChatAttachmentSettingsSection
+        defaultValues={{
+          localDir: settings['chat_attachment.local_dir'],
+          publicBaseURL: settings['chat_attachment.public_base_url'],
+          maxImageFileSizeMB:
+            settings['chat_attachment.max_image_file_size_mb'],
+          maxImageCount: settings['chat_attachment.max_image_count'],
+          allowedImageMimeTypes:
+            settings['chat_attachment.allowed_image_mime_types'],
+        }}
+      />
     ),
   },
   {
