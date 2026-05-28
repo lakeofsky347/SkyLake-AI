@@ -100,6 +100,11 @@ export type ChatSendPayload = {
   group?: string
 }
 
+export type ChatRegeneratePayload = {
+  model: string
+  group?: string
+}
+
 export type ChatMessageUsage = {
   prompt_tokens: number
   completion_tokens: number

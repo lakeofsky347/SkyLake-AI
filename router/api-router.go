@@ -296,6 +296,7 @@ func SetApiRouter(router *gin.Engine) {
 			chatRoute.POST("/conversations/:id/messages", controller.AppendChatMessages)
 			chatRoute.POST("/conversations/:id/send", controller.SendChatMessage)
 			chatRoute.POST("/conversations/:id/stream", controller.StreamChatMessage)
+			chatRoute.POST("/conversations/:id/regenerate", controller.StreamChatMessageRegeneration)
 		}
 
 		usageRoute := apiRouter.Group("/usage")

@@ -25,6 +25,7 @@ import type {
   ChatConversationPayload,
   ChatMessage,
   ChatMessagePayload,
+  ChatRegeneratePayload,
   ChatSendPayload,
   ChatSendResponse,
 } from './types'
@@ -134,70 +135,22 @@ export async function sendChatMessage(
   return res.data
 }
 
-function getStreamErrorMessage(raw: string): string {
-  try {
-    const parsed = JSON.parse(raw) as {
-      message?: string
-      error?: ChatStreamChunk['error']
-    }
-    if (parsed.message) return parsed.message
-    if (typeof parsed.error === 'string') return parsed.error
-    if (parsed.error?.message) return parsed.error.message
-  } catch {
-    /* empty */
-  }
-  return raw.trim() || 'Failed to send message'
-}
-
-function readStreamDelta(raw: string): string {
-  const data = raw.trim()
-  if (!data || data === '[DONE]') return ''
-
-  const parsed = JSON.parse(data) as ChatStreamChunk
-  if (typeof parsed.error === 'string') {
-    throw new Error(parsed.error)
-  }
-  if (parsed.error?.message) {
-    throw new Error(parsed.error.message)
-  }
-
-  let delta = ''
-  for (const choice of parsed.choices ?? []) {
-    if (typeof choice.delta?.content === 'string') {
-      delta += choice.delta.content
-    }
-  }
-  return delta
-}
-
-function readStreamEventData(event: string): string[] {
-  return event
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('data:'))
-    .map((line) => line.slice(5).trim())
-    .filter(Boolean)
-}
-
-export async function streamChatMessage(
-  conversationId: number,
-  payload: ChatSendPayload,
+async function streamChatRequest(
+  path: string,
+  payload: ChatSendPayload | ChatRegeneratePayload,
   onDelta: (delta: string) => void,
   signal?: AbortSignal
 ): Promise<string> {
-  const response = await fetch(
-    `/api/chat/conversations/${conversationId}/stream`,
-    {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        ...getCommonHeaders(),
-        Accept: 'text/event-stream',
-      },
-      body: JSON.stringify(payload),
-      signal,
-    }
-  )
+  const response = await fetch(path, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      ...getCommonHeaders(),
+      Accept: 'text/event-stream',
+    },
+    body: JSON.stringify(payload),
+    signal,
+  })
 
   if (!response.ok) {
     throw new Error(getStreamErrorMessage(await response.text()))
@@ -257,4 +210,77 @@ export async function streamChatMessage(
 
   if (streamError) throw streamError
   return fullContent
+}
+
+function getStreamErrorMessage(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw) as {
+      message?: string
+      error?: ChatStreamChunk['error']
+    }
+    if (parsed.message) return parsed.message
+    if (typeof parsed.error === 'string') return parsed.error
+    if (parsed.error?.message) return parsed.error.message
+  } catch {
+    /* empty */
+  }
+  return raw.trim() || 'Failed to send message'
+}
+
+function readStreamDelta(raw: string): string {
+  const data = raw.trim()
+  if (!data || data === '[DONE]') return ''
+
+  const parsed = JSON.parse(data) as ChatStreamChunk
+  if (typeof parsed.error === 'string') {
+    throw new Error(parsed.error)
+  }
+  if (parsed.error?.message) {
+    throw new Error(parsed.error.message)
+  }
+
+  let delta = ''
+  for (const choice of parsed.choices ?? []) {
+    if (typeof choice.delta?.content === 'string') {
+      delta += choice.delta.content
+    }
+  }
+  return delta
+}
+
+function readStreamEventData(event: string): string[] {
+  return event
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trim())
+    .filter(Boolean)
+}
+
+export async function streamChatMessage(
+  conversationId: number,
+  payload: ChatSendPayload,
+  onDelta: (delta: string) => void,
+  signal?: AbortSignal
+): Promise<string> {
+  return streamChatRequest(
+    `/api/chat/conversations/${conversationId}/stream`,
+    payload,
+    onDelta,
+    signal
+  )
+}
+
+export async function streamChatRegeneration(
+  conversationId: number,
+  payload: ChatRegeneratePayload,
+  onDelta: (delta: string) => void,
+  signal?: AbortSignal
+): Promise<string> {
+  return streamChatRequest(
+    `/api/chat/conversations/${conversationId}/regenerate`,
+    payload,
+    onDelta,
+    signal
+  )
 }

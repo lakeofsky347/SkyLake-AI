@@ -19,11 +19,13 @@ For commercial licensing, please contact support@quantumnous.com
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertTriangle,
   Bot,
   ImageIcon,
   Loader2,
   MessageSquare,
   Plus,
+  RotateCcw,
   Send,
   Square,
   Trash2,
@@ -34,11 +36,13 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Markdown } from '@/components/ui/markdown'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
+import { getUserId } from '@/features/auth/lib/storage'
 import type { SystemStatus } from '@/features/auth/types'
 import { getUserGroups, getUserModels } from '@/features/playground/api'
 import {
@@ -48,6 +52,7 @@ import {
   getChatConversations,
   getChatMessages,
   getPendingChatAttachments,
+  streamChatRegeneration,
   streamChatMessage,
   uploadChatAttachment,
   updateChatConversation,
@@ -69,6 +74,7 @@ const CHAT_DEFAULT_ALLOWED_IMAGE_MIME_TYPES = [
 ]
 const CHAT_DEFAULT_MAX_IMAGE_ATTACHMENTS = 8
 const CHAT_DEFAULT_MAX_IMAGE_FILE_SIZE_BYTES = 10 * 1024 * 1024
+const CHAT_DRAFT_STORAGE_KEY = 'chat.drafts.v1'
 
 type ChatImageAttachment = {
   id: string
@@ -81,6 +87,21 @@ type ChatAttachmentClientConfig = {
   allowedImageMimeTypes: string[]
   maxImageAttachments: number
   maxImageFileSizeBytes: number
+}
+
+type ChatStoredDraft = {
+  input: string
+  imageUrlInput: string
+  isImageUrlOpen: boolean
+  externalImageAttachments: Array<{
+    id: string
+    url: string
+  }>
+}
+
+type ChatResponseFailure = {
+  conversationId: number
+  message: string
 }
 
 function getStatusValue<T>(status: SystemStatus | null, key: string) {
@@ -135,6 +156,105 @@ function getChatAttachmentClientConfig(
 function buildChatTitle(content: string) {
   const title = content.replace(/\s+/g, ' ').trim()
   return title.length > 48 ? `${title.slice(0, 48)}...` : title || 'New chat'
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function getChatDraftKey(conversationId: number) {
+  return `${getUserId() ?? 'anonymous'}:${conversationId}`
+}
+
+function readChatDraftMap(): Record<string, unknown> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(CHAT_DRAFT_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    return isRecord(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function normalizeStoredChatDraft(value: unknown): ChatStoredDraft {
+  if (!isRecord(value)) {
+    return {
+      input: '',
+      imageUrlInput: '',
+      isImageUrlOpen: false,
+      externalImageAttachments: [],
+    }
+  }
+
+  const externalImageAttachments = Array.isArray(value.externalImageAttachments)
+    ? value.externalImageAttachments
+        .filter(isRecord)
+        .map((attachment) => ({
+          id:
+            typeof attachment.id === 'string'
+              ? attachment.id
+              : `external-${Date.now()}`,
+          url: typeof attachment.url === 'string' ? attachment.url.trim() : '',
+        }))
+        .filter((attachment) => attachment.url)
+    : []
+
+  return {
+    input: typeof value.input === 'string' ? value.input : '',
+    imageUrlInput:
+      typeof value.imageUrlInput === 'string' ? value.imageUrlInput : '',
+    isImageUrlOpen: value.isImageUrlOpen === true,
+    externalImageAttachments,
+  }
+}
+
+function getStoredChatDraft(conversationId: number): ChatStoredDraft {
+  return normalizeStoredChatDraft(
+    readChatDraftMap()[getChatDraftKey(conversationId)]
+  )
+}
+
+function isStoredChatDraftEmpty(draft: ChatStoredDraft) {
+  return (
+    draft.input.trim() === '' &&
+    draft.imageUrlInput.trim() === '' &&
+    draft.externalImageAttachments.length === 0
+  )
+}
+
+function setStoredChatDraft(conversationId: number, draft: ChatStoredDraft) {
+  if (typeof window === 'undefined') return
+  try {
+    const draftMap = readChatDraftMap()
+    const key = getChatDraftKey(conversationId)
+    if (isStoredChatDraftEmpty(draft)) {
+      delete draftMap[key]
+    } else {
+      draftMap[key] = draft
+    }
+    window.localStorage.setItem(
+      CHAT_DRAFT_STORAGE_KEY,
+      JSON.stringify(draftMap)
+    )
+  } catch {
+    /* local draft persistence is best-effort */
+  }
+}
+
+function clearStoredChatDraft(conversationId: number) {
+  if (typeof window === 'undefined') return
+  try {
+    const draftMap = readChatDraftMap()
+    delete draftMap[getChatDraftKey(conversationId)]
+    window.localStorage.setItem(
+      CHAT_DRAFT_STORAGE_KEY,
+      JSON.stringify(draftMap)
+    )
+  } catch {
+    /* local draft persistence is best-effort */
+  }
 }
 
 function mapChatAttachmentToImageAttachment(
@@ -287,6 +407,13 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
   )
 }
 
+function getChatErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message === 'Failed to send message' ? fallback : error.message
+  }
+  return fallback
+}
+
 export function ChatApp() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -306,8 +433,12 @@ export function ChatApp() {
   const [isImageUrlOpen, setIsImageUrlOpen] = useState(false)
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false)
   const [isSending, setIsSending] = useState(false)
+  const [isRetryingResponse, setIsRetryingResponse] = useState(false)
+  const [responseFailure, setResponseFailure] =
+    useState<ChatResponseFailure | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const restoredDraftConversationIdRef = useRef<number | null>(null)
 
   const conversationsQuery = useQuery({
     queryKey: CHAT_CONVERSATIONS_QUERY_KEY,
@@ -354,6 +485,7 @@ export function ChatApp() {
     [pendingMessages, storedMessages]
   )
   const hasDraft = input.trim() !== '' || imageAttachments.length > 0
+  const isGenerating = isSending || isRetryingResponse
   const canAttachMoreImages =
     imageAttachments.length < attachmentConfig.maxImageAttachments
   const canAddImageUrl =
@@ -367,12 +499,28 @@ export function ChatApp() {
 
   useEffect(() => {
     if (activeConversationId === null) {
+      restoredDraftConversationIdRef.current = null
+      setInput('')
+      setImageUrlInput('')
+      setIsImageUrlOpen(false)
       setImageAttachments([])
       return
     }
 
     let cancelled = false
-    setImageAttachments([])
+    const storedDraft = getStoredChatDraft(activeConversationId)
+    restoredDraftConversationIdRef.current = activeConversationId
+    setInput(storedDraft.input)
+    setImageUrlInput(storedDraft.imageUrlInput)
+    setIsImageUrlOpen(
+      storedDraft.isImageUrlOpen || storedDraft.imageUrlInput.trim() !== ''
+    )
+    setImageAttachments(
+      storedDraft.externalImageAttachments.map((attachment) => ({
+        ...attachment,
+        source: 'external' as const,
+      }))
+    )
 
     void (async () => {
       const response = await getPendingChatAttachments(activeConversationId)
@@ -381,15 +529,60 @@ export function ChatApp() {
         toast.error(response.message || t('Failed to load image attachments'))
         return
       }
-      setImageAttachments(
-        (response.data ?? []).map(mapChatAttachmentToImageAttachment)
+      const uploadedAttachments = (response.data ?? []).map(
+        mapChatAttachmentToImageAttachment
       )
+      setImageAttachments((attachments) => {
+        const uploadedById = new Map(
+          uploadedAttachments.map((attachment) => [attachment.id, attachment])
+        )
+        for (const attachment of attachments) {
+          if (attachment.source === 'uploaded') {
+            uploadedById.set(attachment.id, attachment)
+          }
+        }
+        return [
+          ...uploadedById.values(),
+          ...attachments.filter(
+            (attachment) => attachment.source === 'external'
+          ),
+        ]
+      })
     })()
 
     return () => {
       cancelled = true
     }
   }, [activeConversationId, t])
+
+  useEffect(() => {
+    if (
+      activeConversationId === null ||
+      restoredDraftConversationIdRef.current !== activeConversationId ||
+      isSending
+    ) {
+      return
+    }
+
+    setStoredChatDraft(activeConversationId, {
+      input,
+      imageUrlInput,
+      isImageUrlOpen,
+      externalImageAttachments: imageAttachments
+        .filter((attachment) => attachment.source === 'external')
+        .map((attachment) => ({
+          id: attachment.id,
+          url: attachment.url,
+        })),
+    })
+  }, [
+    activeConversationId,
+    imageAttachments,
+    imageUrlInput,
+    input,
+    isImageUrlOpen,
+    isSending,
+  ])
 
   useEffect(() => {
     if (!activeConversation) return
@@ -423,6 +616,27 @@ export function ChatApp() {
         queryKey: ['chat', 'messages', conversationId],
       }),
     ])
+  }
+
+  async function recoverAfterSendFailure(
+    conversationId: number,
+    content: string,
+    attachmentsForRequest: ChatImageAttachment[],
+    message: string
+  ) {
+    const response = await getChatMessages(conversationId)
+    const lastMessage = response.data?.at(-1)
+    if (response.success && lastMessage?.role === 'user') {
+      setResponseFailure({
+        conversationId,
+        message,
+      })
+    } else {
+      setInput(content)
+      setImageAttachments(attachmentsForRequest)
+      setResponseFailure(null)
+    }
+    await refreshChatData(conversationId)
   }
 
   async function ensureConversation(content: string) {
@@ -468,6 +682,8 @@ export function ChatApp() {
       toast.error(response.message || t('Failed to create chat'))
       return
     }
+    clearStoredChatDraft(response.data.id)
+    setResponseFailure(null)
     setActiveConversationId(response.data.id)
     setInput('')
     setPendingMessages([])
@@ -485,9 +701,11 @@ export function ChatApp() {
       toast.error(response.message || t('Failed to delete chat'))
       return
     }
+    clearStoredChatDraft(conversation.id)
     if (activeConversationId === conversation.id) {
       setActiveConversationId(null)
       setPendingMessages([])
+      setResponseFailure(null)
       setImageAttachments([])
       setImageUrlInput('')
       setIsImageUrlOpen(false)
@@ -630,7 +848,7 @@ export function ChatApp() {
 
   async function handleSend() {
     const content = input.trim()
-    if ((!content && imageAttachments.length === 0) || isSending) return
+    if ((!content && imageAttachments.length === 0) || isGenerating) return
     if (!selectedModel) {
       toast.error(t('Select a model before sending.'))
       return
@@ -639,6 +857,7 @@ export function ChatApp() {
     const attachmentsForRequest = imageAttachments
     const contentParts = buildChatContentParts(content, attachmentsForRequest)
     setIsSending(true)
+    setResponseFailure(null)
     const abortController = new AbortController()
     abortControllerRef.current = abortController
     setInput('')
@@ -684,6 +903,7 @@ export function ChatApp() {
         },
         abortController.signal
       )
+      clearStoredChatDraft(conversation.id)
       setPendingMessages([])
       await refreshChatData(conversation.id)
     } catch (error) {
@@ -703,11 +923,82 @@ export function ChatApp() {
       toast.error(message)
       setPendingMessages([])
       if (conversationIdForRefresh !== null) {
-        await refreshChatData(conversationIdForRefresh)
+        await recoverAfterSendFailure(
+          conversationIdForRefresh,
+          content,
+          attachmentsForRequest,
+          message
+        )
+      } else {
+        setInput(content)
+        setImageAttachments(attachmentsForRequest)
       }
     } finally {
       abortControllerRef.current = null
       setIsSending(false)
+    }
+  }
+
+  async function handleRetryResponse() {
+    if (activeConversationId === null || isGenerating) return
+    if (!selectedModel) {
+      toast.error(t('Select a model before sending.'))
+      return
+    }
+
+    const conversationId = activeConversationId
+    setIsRetryingResponse(true)
+    setResponseFailure(null)
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
+    const thinkingText = t('Thinking...')
+    const assistantPlaceholder = createPendingMessage(
+      'assistant',
+      thinkingText,
+      selectedModel
+    )
+    setPendingMessages([assistantPlaceholder])
+
+    try {
+      let streamedContent = ''
+      await streamChatRegeneration(
+        conversationId,
+        {
+          model: selectedModel,
+          group: selectedGroup || undefined,
+        },
+        (delta) => {
+          streamedContent += delta
+          setPendingMessages((messages) =>
+            messages.map((message) =>
+              message.id === assistantPlaceholder.id
+                ? { ...message, content: streamedContent || thinkingText }
+                : message
+            )
+          )
+        },
+        abortController.signal
+      )
+      setResponseFailure(null)
+      setPendingMessages([])
+      await refreshChatData(conversationId)
+    } catch (error) {
+      const aborted = error instanceof Error && error.name === 'AbortError'
+      setPendingMessages([])
+      if (aborted) {
+        await refreshChatData(conversationId)
+        return
+      }
+      const message = getChatErrorMessage(error, t('Failed to send message'))
+      toast.error(message)
+      setResponseFailure({
+        conversationId,
+        message,
+      })
+      await refreshChatData(conversationId)
+    } finally {
+      abortControllerRef.current = null
+      setIsRetryingResponse(false)
     }
   }
 
@@ -858,6 +1149,28 @@ export function ChatApp() {
               {visibleMessages.map((message) => (
                 <ChatMessageBubble key={message.id} message={message} />
               ))}
+              {responseFailure?.conversationId === activeConversationId && (
+                <Alert variant='destructive'>
+                  <AlertTriangle className='size-4' />
+                  <AlertTitle>{t('Response failed')}</AlertTitle>
+                  <AlertDescription className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                    <span>{responseFailure.message}</span>
+                    <Button
+                      disabled={isGenerating || !selectedModel}
+                      onClick={handleRetryResponse}
+                      size='sm'
+                      variant='outline'
+                    >
+                      {isRetryingResponse ? (
+                        <Loader2 className='size-4 animate-spin' />
+                      ) : (
+                        <RotateCcw className='size-4' />
+                      )}
+                      {t('Retry response')}
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
           )}
         </div>
@@ -898,7 +1211,7 @@ export function ChatApp() {
             {isImageUrlOpen && (
               <div className='flex flex-col gap-2 sm:flex-row'>
                 <Input
-                  disabled={isSending}
+                  disabled={isGenerating}
                   onChange={(event) => setImageUrlInput(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
@@ -912,7 +1225,7 @@ export function ChatApp() {
                 />
                 <div className='flex gap-2'>
                   <Button
-                    disabled={!canAddImageUrl || isSending}
+                    disabled={!canAddImageUrl || isGenerating}
                     onClick={handleAddImageUrl}
                     variant='outline'
                   >
@@ -941,7 +1254,7 @@ export function ChatApp() {
               }}
               placeholder={t('Message the model...')}
               className='max-h-40 min-h-20 resize-none'
-              disabled={isSending}
+              disabled={isGenerating}
             />
             <div className='flex items-center justify-between gap-2'>
               <p className='text-muted-foreground text-xs'>
@@ -950,7 +1263,9 @@ export function ChatApp() {
               <div className='flex items-center gap-2'>
                 <Button
                   disabled={
-                    isSending || isUploadingAttachment || !canAttachMoreImages
+                    isGenerating ||
+                    isUploadingAttachment ||
+                    !canAttachMoreImages
                   }
                   onClick={() => fileInputRef.current?.click()}
                   variant='outline'
@@ -964,14 +1279,16 @@ export function ChatApp() {
                 </Button>
                 <Button
                   disabled={
-                    isSending || isUploadingAttachment || !canAttachMoreImages
+                    isGenerating ||
+                    isUploadingAttachment ||
+                    !canAttachMoreImages
                   }
                   onClick={() => setIsImageUrlOpen((value) => !value)}
                   variant='outline'
                 >
                   {t('URL')}
                 </Button>
-                {isSending ? (
+                {isGenerating ? (
                   <Button variant='outline' onClick={handleStopGenerating}>
                     <Square className='size-4 fill-current' />
                     {t('Stop')}

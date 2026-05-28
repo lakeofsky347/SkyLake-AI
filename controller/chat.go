@@ -58,6 +58,14 @@ type sendChatMessageRequest struct {
 	TopP         *float64                        `json:"top_p,omitempty"`
 }
 
+type regenerateChatMessageRequest struct {
+	Model       string   `json:"model"`
+	Group       string   `json:"group"`
+	MaxTokens   *uint    `json:"max_tokens,omitempty"`
+	Temperature *float64 `json:"temperature,omitempty"`
+	TopP        *float64 `json:"top_p,omitempty"`
+}
+
 type sendChatMessageResponse struct {
 	Conversation     *model.ChatConversation `json:"conversation"`
 	UserMessage      *model.ChatMessage      `json:"user_message"`
@@ -294,8 +302,8 @@ func chatMessageContentForCompletion(message *model.ChatMessage) any {
 	return strings.TrimSpace(message.Content)
 }
 
-func chatMessagesForCompletion(storedMessages []*model.ChatMessage, userContent string, userContentParts []dto.MediaContent) []dto.Message {
-	messages := make([]dto.Message, 0, len(storedMessages)+1)
+func chatMessagesForStoredCompletion(storedMessages []*model.ChatMessage) []dto.Message {
+	messages := make([]dto.Message, 0, len(storedMessages))
 	for _, message := range storedMessages {
 		role := strings.TrimSpace(message.Role)
 		content := chatMessageContentForCompletion(message)
@@ -310,6 +318,11 @@ func chatMessagesForCompletion(storedMessages []*model.ChatMessage, userContent 
 			Content: content,
 		})
 	}
+	return messages
+}
+
+func chatMessagesForCompletion(storedMessages []*model.ChatMessage, userContent string, userContentParts []dto.MediaContent) []dto.Message {
+	messages := chatMessagesForStoredCompletion(storedMessages)
 	content := any(userContent)
 	if len(userContentParts) > 0 {
 		content = userContentParts
@@ -319,6 +332,15 @@ func chatMessagesForCompletion(storedMessages []*model.ChatMessage, userContent 
 		Content: content,
 	})
 	return messages
+}
+
+func lastStoredChatMessage(messages []*model.ChatMessage) *model.ChatMessage {
+	for index := len(messages) - 1; index >= 0; index-- {
+		if messages[index] != nil {
+			return messages[index]
+		}
+	}
+	return nil
 }
 
 func chatCompletionContentToString(content any) string {
@@ -643,6 +665,96 @@ func StreamChatMessage(c *gin.Context) {
 	}
 	if err := model.TouchChatConversation(userId, conversationId, assistantModel, group); err != nil {
 		common.SysError("touch stream chat conversation error: " + err.Error())
+	}
+}
+
+func StreamChatMessageRegeneration(c *gin.Context) {
+	userId := c.GetInt("id")
+	conversationId, ok := parseChatConversationId(c)
+	if !ok {
+		return
+	}
+	conversation, owned, err := ensureChatConversationOwned(userId, conversationId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if !owned {
+		common.ApiErrorMsg(c, "conversation not found")
+		return
+	}
+
+	var req regenerateChatMessageRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorMsg(c, "invalid request body")
+		return
+	}
+
+	storedMessages, err := model.ListChatMessages(userId, conversationId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	lastMessage := lastStoredChatMessage(storedMessages)
+	if lastMessage == nil || strings.TrimSpace(lastMessage.Role) != model.ChatMessageRoleUser {
+		common.ApiErrorMsg(c, "last message is not retryable")
+		return
+	}
+
+	modelName := strings.TrimSpace(req.Model)
+	if modelName == "" {
+		modelName = strings.TrimSpace(lastMessage.ModelName)
+	}
+	if modelName == "" {
+		modelName = strings.TrimSpace(conversation.ModelName)
+	}
+	if modelName == "" {
+		common.ApiErrorMsg(c, "model is required")
+		return
+	}
+	group := strings.TrimSpace(req.Group)
+	if group == "" {
+		group = strings.TrimSpace(conversation.Group)
+	}
+
+	stream := true
+	responseBody, _, err := callChatCompletionRelayStream(c, &chatCompletionRelayRequest{
+		Model:       modelName,
+		Group:       group,
+		Messages:    chatMessagesForStoredCompletion(storedMessages),
+		Stream:      &stream,
+		MaxTokens:   req.MaxTokens,
+		Temperature: req.Temperature,
+		TopP:        req.TopP,
+	})
+	if err != nil {
+		return
+	}
+
+	streamResult := parseChatStreamCapture(responseBody)
+	if !streamResult.Done || c.Request.Context().Err() != nil {
+		return
+	}
+	if streamResult.Content == "" {
+		return
+	}
+	assistantModel := streamResult.Model
+	if assistantModel == "" {
+		assistantModel = modelName
+	}
+	assistantMessage := &model.ChatMessage{
+		Role:             model.ChatMessageRoleAssistant,
+		Content:          streamResult.Content,
+		ModelName:        assistantModel,
+		PromptTokens:     streamResult.Usage.PromptTokens,
+		CompletionTokens: streamResult.Usage.CompletionTokens,
+	}
+	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{assistantMessage}); err != nil {
+		common.SysError("save regenerated chat message error: " + err.Error())
+		return
+	}
+	if err := model.TouchChatConversation(userId, conversationId, assistantModel, group); err != nil {
+		common.SysError("touch regenerated chat conversation error: " + err.Error())
 	}
 }
 
