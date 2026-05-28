@@ -23,6 +23,7 @@ import type {
   ChatConversation,
   ChatConversationList,
   ChatConversationPayload,
+  ChatConversationUsage,
   ChatMessage,
   ChatMessagePayload,
   ChatRegeneratePayload,
@@ -76,6 +77,13 @@ export async function getChatMessages(
   const res = await api.get(
     `/api/chat/conversations/${conversationId}/messages`
   )
+  return res.data
+}
+
+export async function getChatConversationUsage(
+  conversationId: number
+): Promise<ApiResponse<ChatConversationUsage>> {
+  const res = await api.get(`/api/chat/conversations/${conversationId}/usage`)
   return res.data
 }
 

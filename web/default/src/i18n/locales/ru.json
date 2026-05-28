@@ -681,6 +681,8 @@
     "Chat Attachments": "Вложения чата",
     "Chat attachment storage": "Хранение вложений чата",
     "Chat session management": "Управление сессиями чата",
+    "Chat and API use the same account balance.": "Chat и API используют один баланс аккаунта.",
+    "Chat billing": "Биллинг Chat",
     "Chat Workspace": "Рабочая область Chat",
     "Configure storage and public URL behavior for uploaded chat images.": "Настройте хранилище и поведение публичных URL для загружаемых изображений чата.",
     "Control where uploaded chat images are stored and how their public links are generated.": "Управляйте местом хранения загруженных изображений чата и способом формирования их публичных ссылок.",

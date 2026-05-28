@@ -18,9 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import {
   AlertTriangle,
   Bot,
+  Crown,
   ImageIcon,
   Loader2,
   MessageSquare,
@@ -30,6 +32,7 @@ import {
   Square,
   Trash2,
   User,
+  WalletCards,
   X,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -37,6 +40,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Markdown } from '@/components/ui/markdown'
@@ -45,6 +49,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { getUserId } from '@/features/auth/lib/storage'
 import type { SystemStatus } from '@/features/auth/types'
 import { getUserGroups, getUserModels } from '@/features/playground/api'
+import { getSelfSubscriptionFull } from '@/features/subscriptions/api'
 import {
   createChatConversation,
   deleteChatAttachment,
@@ -156,6 +161,23 @@ function getChatAttachmentClientConfig(
 function buildChatTitle(content: string) {
   const title = content.replace(/\s+/g, ' ').trim()
   return title.length > 48 ? `${title.slice(0, 48)}...` : title || 'New chat'
+}
+
+function formatTokenCount(value: number) {
+  const count = Math.max(0, Math.floor(Number(value) || 0))
+  return count.toLocaleString()
+}
+
+function getChatMessageTokenUsage(message: ChatMessage) {
+  const promptTokens = Math.max(0, Number(message.prompt_tokens) || 0)
+  const completionTokens = Math.max(0, Number(message.completion_tokens) || 0)
+  const totalTokens = promptTokens + completionTokens
+  if (totalTokens <= 0) return null
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens,
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -352,6 +374,7 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
     contentParts.length > 0
       ? textParts.filter(Boolean).join('\n\n')
       : message.content
+  const tokenUsage = getChatMessageTokenUsage(message)
 
   return (
     <div
@@ -395,6 +418,31 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
                 />
               </a>
             ))}
+          </div>
+        )}
+        {tokenUsage && (
+          <div
+            className={cn(
+              'mt-2 flex flex-wrap gap-x-2 gap-y-1 border-t pt-2 text-[11px] leading-4',
+              isUser
+                ? 'border-primary-foreground/20 text-primary-foreground/70'
+                : 'border-border text-muted-foreground'
+            )}
+          >
+            {tokenUsage.promptTokens > 0 && (
+              <span>
+                {t('Input tokens')}: {formatTokenCount(tokenUsage.promptTokens)}
+              </span>
+            )}
+            {tokenUsage.completionTokens > 0 && (
+              <span>
+                {t('Output tokens')}:{' '}
+                {formatTokenCount(tokenUsage.completionTokens)}
+              </span>
+            )}
+            <span>
+              {t('Total tokens')}: {formatTokenCount(tokenUsage.totalTokens)}
+            </span>
           </div>
         )}
       </div>
@@ -457,9 +505,18 @@ export function ChatApp() {
     staleTime: 5 * 60 * 1000,
   })
 
+  const subscriptionStatusQuery = useQuery({
+    queryKey: ['chat', 'subscription-status'],
+    queryFn: getSelfSubscriptionFull,
+    staleTime: 5 * 60 * 1000,
+  })
+
   const conversations = conversationsQuery.data?.data?.items ?? []
   const models = modelsQuery.data ?? []
   const groups = groupsQuery.data ?? []
+  const activeSubscriptionCount =
+    subscriptionStatusQuery.data?.data?.subscriptions?.length ?? 0
+  const hasActiveSubscription = activeSubscriptionCount > 0
   const attachmentConfig = useMemo(
     () => getChatAttachmentClientConfig(status),
     [status]
@@ -1075,52 +1132,86 @@ export function ChatApp() {
       </aside>
 
       <main className='flex min-h-0 flex-1 flex-col'>
-        <div className='border-border flex flex-col gap-3 border-b p-3 lg:flex-row lg:items-center'>
-          <Input
-            value={draftTitle}
-            onChange={(event) => setDraftTitle(event.target.value)}
-            onBlur={handleSaveTitle}
-            placeholder={t('New chat')}
-            disabled={!activeConversation}
-            className='min-w-0 flex-1'
-          />
-          <div className='grid gap-2 sm:grid-cols-2 lg:w-[520px]'>
-            <NativeSelect
-              value={selectedModel}
-              onChange={(event) => setSelectedModel(event.target.value)}
-              aria-label={t('Model')}
-              className='w-full'
-            >
-              {models.length === 0 ? (
-                <NativeSelectOption value=''>
-                  {t('No model available')}
-                </NativeSelectOption>
-              ) : (
-                models.map((model) => (
-                  <NativeSelectOption key={model.value} value={model.value}>
-                    {model.label}
+        <div className='border-border border-b p-3'>
+          <div className='flex flex-col gap-3 lg:flex-row lg:items-center'>
+            <Input
+              value={draftTitle}
+              onChange={(event) => setDraftTitle(event.target.value)}
+              onBlur={handleSaveTitle}
+              placeholder={t('New chat')}
+              disabled={!activeConversation}
+              className='min-w-0 flex-1'
+            />
+            <div className='grid gap-2 sm:grid-cols-2 lg:w-[520px]'>
+              <NativeSelect
+                value={selectedModel}
+                onChange={(event) => setSelectedModel(event.target.value)}
+                aria-label={t('Model')}
+                className='w-full'
+              >
+                {models.length === 0 ? (
+                  <NativeSelectOption value=''>
+                    {t('No model available')}
                   </NativeSelectOption>
-                ))
-              )}
-            </NativeSelect>
-            <NativeSelect
-              value={selectedGroup}
-              onChange={(event) => setSelectedGroup(event.target.value)}
-              aria-label={t('Group')}
-              className='w-full'
-            >
-              {groups.length === 0 ? (
-                <NativeSelectOption value=''>
-                  {t('Default group')}
-                </NativeSelectOption>
-              ) : (
-                groups.map((group) => (
-                  <NativeSelectOption key={group.value} value={group.value}>
-                    {group.label}
+                ) : (
+                  models.map((model) => (
+                    <NativeSelectOption key={model.value} value={model.value}>
+                      {model.label}
+                    </NativeSelectOption>
+                  ))
+                )}
+              </NativeSelect>
+              <NativeSelect
+                value={selectedGroup}
+                onChange={(event) => setSelectedGroup(event.target.value)}
+                aria-label={t('Group')}
+                className='w-full'
+              >
+                {groups.length === 0 ? (
+                  <NativeSelectOption value=''>
+                    {t('Default group')}
                   </NativeSelectOption>
-                ))
-              )}
-            </NativeSelect>
+                ) : (
+                  groups.map((group) => (
+                    <NativeSelectOption key={group.value} value={group.value}>
+                      {group.label}
+                    </NativeSelectOption>
+                  ))
+                )}
+              </NativeSelect>
+            </div>
+          </div>
+          <div className='border-border bg-muted/30 mt-3 flex flex-col gap-2 rounded-lg border px-3 py-2 sm:flex-row sm:items-center sm:justify-between'>
+            <div className='flex min-w-0 items-center gap-2'>
+              <div className='bg-background text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-md border'>
+                <WalletCards className='size-4' />
+              </div>
+              <div className='min-w-0'>
+                <p className='text-sm font-medium'>{t('Chat billing')}</p>
+                <p className='text-muted-foreground truncate text-xs'>
+                  {t('Chat and API use the same account balance.')}
+                </p>
+              </div>
+            </div>
+            <div className='flex flex-wrap items-center gap-2'>
+              <Badge variant='outline'>{t('Shared account balance')}</Badge>
+              <Badge variant={hasActiveSubscription ? 'default' : 'secondary'}>
+                <Crown className='size-3' />
+                {subscriptionStatusQuery.isLoading
+                  ? t('Loading...')
+                  : hasActiveSubscription
+                    ? `${activeSubscriptionCount} ${t('active')}`
+                    : t('No Active')}
+              </Badge>
+              <Button
+                size='sm'
+                variant='outline'
+                render={<Link to='/console/wallet' />}
+              >
+                <WalletCards className='size-4' />
+                {t('Wallet')}
+              </Button>
+            </div>
           </div>
         </div>
 

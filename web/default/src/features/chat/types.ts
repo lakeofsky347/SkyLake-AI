@@ -80,6 +80,17 @@ export type ChatConversationList = {
   total: number
 }
 
+export type ChatConversationUsage = {
+  conversation_id: number
+  message_count: number
+  user_message_count: number
+  assistant_message_count: number
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  quota: number
+}
+
 export type ChatConversationPayload = {
   title?: string
   model?: string

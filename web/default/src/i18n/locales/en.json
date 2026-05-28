@@ -681,6 +681,8 @@
     "Chat Attachments": "Chat Attachments",
     "Chat attachment storage": "Chat attachment storage",
     "Chat session management": "Chat session management",
+    "Chat and API use the same account balance.": "Chat and API use the same account balance.",
+    "Chat billing": "Chat billing",
     "Chat Workspace": "Chat Workspace",
     "Configure storage and public URL behavior for uploaded chat images.": "Configure storage and public URL behavior for uploaded chat images.",
     "Control where uploaded chat images are stored and how their public links are generated.": "Control where uploaded chat images are stored and how their public links are generated.",

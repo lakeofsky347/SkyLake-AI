@@ -681,6 +681,8 @@
     "Chat Attachments": "チャット添付ファイル",
     "Chat attachment storage": "チャット添付ファイルの保存",
     "Chat session management": "チャットセッション管理",
+    "Chat and API use the same account balance.": "Chat と API は同じアカウント残高を使用します。",
+    "Chat billing": "Chat 請求",
     "Chat Workspace": "Chat ワークスペース",
     "Configure storage and public URL behavior for uploaded chat images.": "アップロードされたチャット画像の保存先と公開 URL の動作を設定します。",
     "Control where uploaded chat images are stored and how their public links are generated.": "アップロードされたチャット画像の保存場所と公開リンクの生成方法を制御します。",

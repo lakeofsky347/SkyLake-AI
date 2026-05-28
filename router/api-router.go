@@ -293,6 +293,7 @@ func SetApiRouter(router *gin.Engine) {
 			chatRoute.POST("/conversations/:id/attachments", controller.UploadChatAttachment)
 			chatRoute.DELETE("/conversations/:id/attachments/:attachmentId", controller.DeleteChatAttachment)
 			chatRoute.GET("/conversations/:id/messages", controller.ListChatMessages)
+			chatRoute.GET("/conversations/:id/usage", controller.GetChatConversationUsage)
 			chatRoute.POST("/conversations/:id/messages", controller.AppendChatMessages)
 			chatRoute.POST("/conversations/:id/send", controller.SendChatMessage)
 			chatRoute.POST("/conversations/:id/stream", controller.StreamChatMessage)

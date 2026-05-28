@@ -39,6 +39,17 @@ type ChatMessage struct {
 	DeletedAt        gorm.DeletedAt `gorm:"index"`
 }
 
+type ChatConversationUsage struct {
+	ConversationId        int `json:"conversation_id"`
+	MessageCount          int `json:"message_count"`
+	UserMessageCount      int `json:"user_message_count"`
+	AssistantMessageCount int `json:"assistant_message_count"`
+	PromptTokens          int `json:"prompt_tokens"`
+	CompletionTokens      int `json:"completion_tokens"`
+	TotalTokens           int `json:"total_tokens"`
+	Quota                 int `json:"quota"`
+}
+
 func IsValidChatMessageRole(role string) bool {
 	switch role {
 	case ChatMessageRoleSystem, ChatMessageRoleUser, ChatMessageRoleAssistant:
@@ -139,6 +150,35 @@ func ListChatMessages(userId int, conversationId int) (messages []*ChatMessage, 
 		Order("created_at asc, id asc").
 		Find(&messages).Error
 	return messages, err
+}
+
+func GetChatConversationUsage(userId int, conversationId int) (*ChatConversationUsage, error) {
+	var messages []ChatMessage
+	err := DB.Model(&ChatMessage{}).
+		Select("role", "prompt_tokens", "completion_tokens", "quota").
+		Where("conversation_id = ? AND user_id = ?", conversationId, userId).
+		Find(&messages).Error
+	if err != nil {
+		return nil, err
+	}
+
+	usage := &ChatConversationUsage{
+		ConversationId: conversationId,
+		MessageCount:   len(messages),
+	}
+	for _, message := range messages {
+		switch message.Role {
+		case ChatMessageRoleUser:
+			usage.UserMessageCount++
+		case ChatMessageRoleAssistant:
+			usage.AssistantMessageCount++
+		}
+		usage.PromptTokens += message.PromptTokens
+		usage.CompletionTokens += message.CompletionTokens
+		usage.Quota += message.Quota
+	}
+	usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
+	return usage, nil
 }
 
 func CreateChatMessages(userId int, conversationId int, messages []*ChatMessage) error {

@@ -681,6 +681,8 @@
     "Chat Attachments": "Tệp đính kèm trò chuyện",
     "Chat attachment storage": "Lưu trữ tệp đính kèm trò chuyện",
     "Chat session management": "Quản lý phiên trò chuyện",
+    "Chat and API use the same account balance.": "Chat và API dùng chung số dư tài khoản.",
+    "Chat billing": "Thanh toán Chat",
     "Chat Workspace": "Không gian Chat",
     "Configure storage and public URL behavior for uploaded chat images.": "Cấu hình nơi lưu trữ và cách tạo URL công khai cho ảnh chat đã tải lên.",
     "Control where uploaded chat images are stored and how their public links are generated.": "Kiểm soát nơi lưu trữ ảnh chat đã tải lên và cách tạo liên kết công khai cho chúng.",

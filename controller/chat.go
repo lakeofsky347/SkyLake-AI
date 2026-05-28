@@ -867,6 +867,28 @@ func ListChatMessages(c *gin.Context) {
 	common.ApiSuccess(c, messages)
 }
 
+func GetChatConversationUsage(c *gin.Context) {
+	userId := c.GetInt("id")
+	conversationId, ok := parseChatConversationId(c)
+	if !ok {
+		return
+	}
+	if _, owned, err := ensureChatConversationOwned(userId, conversationId); err != nil {
+		common.ApiError(c, err)
+		return
+	} else if !owned {
+		common.ApiErrorMsg(c, "conversation not found")
+		return
+	}
+
+	usage, err := model.GetChatConversationUsage(userId, conversationId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, usage)
+}
+
 func AppendChatMessages(c *gin.Context) {
 	userId := c.GetInt("id")
 	conversationId, ok := parseChatConversationId(c)

@@ -681,6 +681,8 @@
     "Chat Attachments": "聊天附件",
     "Chat attachment storage": "聊天附件存储",
     "Chat session management": "聊天会话管理",
+    "Chat and API use the same account balance.": "Chat 与 API 使用同一账户余额。",
+    "Chat billing": "Chat 计费",
     "Chat Workspace": "Chat 工作区",
     "Configure storage and public URL behavior for uploaded chat images.": "配置聊天上传图片的存储方式与公开链接行为。",
     "Control where uploaded chat images are stored and how their public links are generated.": "控制聊天上传图片的存储位置以及公开链接的生成方式。",

@@ -681,6 +681,8 @@
     "Chat Attachments": "Pièces jointes du chat",
     "Chat attachment storage": "Stockage des pièces jointes du chat",
     "Chat session management": "Gestion des sessions de chat",
+    "Chat and API use the same account balance.": "Le Chat et l'API utilisent le même solde de compte.",
+    "Chat billing": "Facturation Chat",
     "Chat Workspace": "Espace Chat",
     "Configure storage and public URL behavior for uploaded chat images.": "Configurez le stockage et le comportement des URL publiques pour les images de chat téléchargées.",
     "Control where uploaded chat images are stored and how their public links are generated.": "Contrôlez l'emplacement de stockage des images de chat téléchargées et la manière dont leurs liens publics sont générés.",
