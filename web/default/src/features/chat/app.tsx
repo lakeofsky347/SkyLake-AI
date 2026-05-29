@@ -37,6 +37,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { formatLogQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -172,12 +173,28 @@ function getChatMessageTokenUsage(message: ChatMessage) {
   const promptTokens = Math.max(0, Number(message.prompt_tokens) || 0)
   const completionTokens = Math.max(0, Number(message.completion_tokens) || 0)
   const totalTokens = promptTokens + completionTokens
-  if (totalTokens <= 0) return null
+  const quota = Math.max(0, Number(message.quota) || 0)
+  if (totalTokens <= 0 && quota <= 0) return null
   return {
     promptTokens,
     completionTokens,
     totalTokens,
+    quota,
   }
+}
+
+function getChatMessageBillingSourceLabel(
+  message: ChatMessage,
+  t: (key: string) => string
+) {
+  const source = String(message.billing_source || '').trim()
+  if (!source) return ''
+  if (source === 'wallet') return t('Wallet')
+  if (source === 'subscription') {
+    const planTitle = String(message.subscription_plan_title || '').trim()
+    return planTitle ? `${t('Subscription')}: ${planTitle}` : t('Subscription')
+  }
+  return source
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -375,6 +392,7 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
       ? textParts.filter(Boolean).join('\n\n')
       : message.content
   const tokenUsage = getChatMessageTokenUsage(message)
+  const billingSourceLabel = getChatMessageBillingSourceLabel(message, t)
 
   return (
     <div
@@ -443,6 +461,16 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
             <span>
               {t('Total tokens')}: {formatTokenCount(tokenUsage.totalTokens)}
             </span>
+            {tokenUsage.quota > 0 && (
+              <span>
+                {t('Fee')}: {formatLogQuota(tokenUsage.quota)}
+              </span>
+            )}
+            {billingSourceLabel && (
+              <span>
+                {t('Billing Source')}: {billingSourceLabel}
+              </span>
+            )}
           </div>
         )}
       </div>

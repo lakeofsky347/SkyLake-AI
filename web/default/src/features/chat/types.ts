@@ -53,6 +53,10 @@ export type ChatMessage = {
   prompt_tokens: number
   completion_tokens: number
   quota: number
+  billing_source?: string
+  subscription_id?: number
+  subscription_plan_id?: number
+  subscription_plan_title?: string
   created_at: number
 }
 

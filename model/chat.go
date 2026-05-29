@@ -25,18 +25,22 @@ type ChatConversation struct {
 }
 
 type ChatMessage struct {
-	Id               int            `json:"id"`
-	ConversationId   int            `json:"conversation_id" gorm:"index:idx_chat_message_conversation_created,priority:1"`
-	UserId           int            `json:"user_id" gorm:"index"`
-	Role             string         `json:"role" gorm:"type:varchar(32);index"`
-	Content          string         `json:"content" gorm:"type:text"`
-	ContentParts     string         `json:"content_parts,omitempty" gorm:"type:text"`
-	ModelName        string         `json:"model_name" gorm:"type:varchar(128);default:'';index"`
-	PromptTokens     int            `json:"prompt_tokens" gorm:"default:0"`
-	CompletionTokens int            `json:"completion_tokens" gorm:"default:0"`
-	Quota            int            `json:"quota" gorm:"default:0"`
-	CreatedAt        int64          `json:"created_at" gorm:"autoCreateTime;index:idx_chat_message_conversation_created,priority:2"`
-	DeletedAt        gorm.DeletedAt `gorm:"index"`
+	Id                    int            `json:"id"`
+	ConversationId        int            `json:"conversation_id" gorm:"index:idx_chat_message_conversation_created,priority:1"`
+	UserId                int            `json:"user_id" gorm:"index"`
+	Role                  string         `json:"role" gorm:"type:varchar(32);index"`
+	Content               string         `json:"content" gorm:"type:text"`
+	ContentParts          string         `json:"content_parts,omitempty" gorm:"type:text"`
+	ModelName             string         `json:"model_name" gorm:"type:varchar(128);default:'';index"`
+	PromptTokens          int            `json:"prompt_tokens" gorm:"default:0"`
+	CompletionTokens      int            `json:"completion_tokens" gorm:"default:0"`
+	Quota                 int            `json:"quota" gorm:"default:0"`
+	BillingSource         string         `json:"billing_source,omitempty" gorm:"type:varchar(32);default:'';index"`
+	SubscriptionId        int            `json:"subscription_id,omitempty" gorm:"default:0"`
+	SubscriptionPlanId    int            `json:"subscription_plan_id,omitempty" gorm:"default:0"`
+	SubscriptionPlanTitle string         `json:"subscription_plan_title,omitempty" gorm:"type:varchar(128);default:''"`
+	CreatedAt             int64          `json:"created_at" gorm:"autoCreateTime;index:idx_chat_message_conversation_created,priority:2"`
+	DeletedAt             gorm.DeletedAt `gorm:"index"`
 }
 
 type ChatConversationUsage struct {

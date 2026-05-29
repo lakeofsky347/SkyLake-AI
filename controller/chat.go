@@ -594,11 +594,15 @@ func chatUsageFromBillingCapture(capture *relaycommon.ChatBillingCapture, fallba
 	}
 }
 
-func chatQuotaFromBillingCapture(capture *relaycommon.ChatBillingCapture) int {
-	if capture == nil {
-		return 0
+func applyChatBillingCapture(message *model.ChatMessage, capture *relaycommon.ChatBillingCapture) {
+	if message == nil || capture == nil {
+		return
 	}
-	return capture.Quota
+	message.Quota = capture.Quota
+	message.BillingSource = capture.BillingSource
+	message.SubscriptionId = capture.SubscriptionId
+	message.SubscriptionPlanId = capture.SubscriptionPlanId
+	message.SubscriptionPlanTitle = capture.SubscriptionPlanTitle
 }
 
 func ListChatConversations(c *gin.Context) {
@@ -713,8 +717,8 @@ func StreamChatMessage(c *gin.Context) {
 		ModelName:        assistantModel,
 		PromptTokens:     usage.PromptTokens,
 		CompletionTokens: usage.CompletionTokens,
-		Quota:            chatQuotaFromBillingCapture(billingCapture),
 	}
+	applyChatBillingCapture(assistantMessage, billingCapture)
 	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{assistantMessage}); err != nil {
 		common.SysError("save stream chat message error: " + err.Error())
 		return
@@ -805,8 +809,8 @@ func StreamChatMessageRegeneration(c *gin.Context) {
 		ModelName:        assistantModel,
 		PromptTokens:     usage.PromptTokens,
 		CompletionTokens: usage.CompletionTokens,
-		Quota:            chatQuotaFromBillingCapture(billingCapture),
 	}
+	applyChatBillingCapture(assistantMessage, billingCapture)
 	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{assistantMessage}); err != nil {
 		common.SysError("save regenerated chat message error: " + err.Error())
 		return
@@ -1118,8 +1122,8 @@ func SendChatMessage(c *gin.Context) {
 		ModelName:        assistantModel,
 		PromptTokens:     usage.PromptTokens,
 		CompletionTokens: usage.CompletionTokens,
-		Quota:            chatQuotaFromBillingCapture(billingCapture),
 	}
+	applyChatBillingCapture(assistantMessage, billingCapture)
 	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{assistantMessage}); err != nil {
 		common.ApiError(c, err)
 		return
