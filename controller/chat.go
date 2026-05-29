@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -381,7 +382,28 @@ func chatRelayErrorMessage(body []byte) string {
 	return "chat completion failed"
 }
 
-func copyChatRelayContext(source *gin.Context) gin.HandlerFunc {
+func ensureChatRelayRequestId(c *gin.Context) string {
+	if c == nil {
+		return common.GetUUID()
+	}
+	requestId := strings.TrimSpace(c.GetString(common.RequestIdKey))
+	if requestId == "" && c.Request != nil {
+		requestId = strings.TrimSpace(c.Request.Header.Get(common.RequestIdKey))
+	}
+	if requestId == "" {
+		requestId = common.GetUUID()
+	}
+	c.Set(common.RequestIdKey, requestId)
+	if c.Request != nil {
+		if c.Request.Header == nil {
+			c.Request.Header = http.Header{}
+		}
+		c.Request.Header.Set(common.RequestIdKey, requestId)
+	}
+	return requestId
+}
+
+func copyChatRelayContext(source *gin.Context, billingCapture *relaycommon.ChatBillingCapture) gin.HandlerFunc {
 	return func(target *gin.Context) {
 		keys := []constant.ContextKey{
 			constant.ContextKeyUserId,
@@ -395,25 +417,33 @@ func copyChatRelayContext(source *gin.Context) gin.HandlerFunc {
 				target.Set(string(key), value)
 			}
 		}
-		for _, key := range []string{"role", "use_access_token"} {
+		for _, key := range []string{"role", "use_access_token", common.RequestIdKey} {
 			if value, exists := source.Get(key); exists {
 				target.Set(key, value)
 			}
+		}
+		target.Set("client_app", "chat")
+		if billingCapture != nil {
+			target.Set(relaycommon.ContextKeyChatBillingCapture, billingCapture)
 		}
 		target.Next()
 	}
 }
 
-func callChatCompletionRelay(c *gin.Context, request *chatCompletionRelayRequest) (*dto.OpenAITextResponse, error) {
+func callChatCompletionRelay(c *gin.Context, request *chatCompletionRelayRequest) (*dto.OpenAITextResponse, *relaycommon.ChatBillingCapture, error) {
 	requestBody, err := common.Marshal(request)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
+	billingCapture := &relaycommon.ChatBillingCapture{}
+	requestId := ensureChatRelayRequestId(c)
 	relayRequest := httptest.NewRequest(http.MethodPost, "/pg/chat/completions", bytes.NewReader(requestBody))
+	relayRequest = relayRequest.WithContext(c.Request.Context())
 	relayRequest.Header = c.Request.Header.Clone()
 	relayRequest.Header.Set("Content-Type", "application/json")
 	relayRequest.Header.Set("Accept", "application/json")
+	relayRequest.Header.Set(common.RequestIdKey, requestId)
 	relayRequest.ContentLength = int64(len(requestBody))
 
 	recorder := httptest.NewRecorder()
@@ -422,7 +452,7 @@ func callChatCompletionRelay(c *gin.Context, request *chatCompletionRelayRequest
 	playgroundRoute := router.Group("/pg")
 	playgroundRoute.Use(middleware.RouteTag("relay"))
 	playgroundRoute.Use(middleware.SystemPerformanceCheck())
-	playgroundRoute.Use(copyChatRelayContext(c), middleware.Distribute())
+	playgroundRoute.Use(copyChatRelayContext(c, billingCapture), middleware.Distribute())
 	playgroundRoute.POST("/chat/completions", Playground)
 	router.ServeHTTP(recorder, relayRequest)
 
@@ -430,17 +460,17 @@ func callChatCompletionRelay(c *gin.Context, request *chatCompletionRelayRequest
 	defer result.Body.Close()
 	responseBody := recorder.Body.Bytes()
 	if result.StatusCode < http.StatusOK || result.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("%s", chatRelayErrorMessage(responseBody))
+		return nil, billingCapture, fmt.Errorf("%s", chatRelayErrorMessage(responseBody))
 	}
 
 	var completion dto.OpenAITextResponse
 	if err := common.Unmarshal(responseBody, &completion); err != nil {
-		return nil, err
+		return nil, billingCapture, err
 	}
 	if openAIError := completion.GetOpenAIError(); openAIError != nil {
-		return nil, fmt.Errorf("%s", openAIError.Message)
+		return nil, billingCapture, fmt.Errorf("%s", openAIError.Message)
 	}
-	return &completion, nil
+	return &completion, billingCapture, nil
 }
 
 func newChatStreamCaptureWriter(writer http.ResponseWriter) *chatStreamCaptureWriter {
@@ -478,17 +508,20 @@ func (w *chatStreamCaptureWriter) BodyBytes() []byte {
 	return w.body.Bytes()
 }
 
-func callChatCompletionRelayStream(c *gin.Context, request *chatCompletionRelayRequest) ([]byte, int, error) {
+func callChatCompletionRelayStream(c *gin.Context, request *chatCompletionRelayRequest) ([]byte, int, *relaycommon.ChatBillingCapture, error) {
 	requestBody, err := common.Marshal(request)
 	if err != nil {
-		return nil, http.StatusInternalServerError, err
+		return nil, http.StatusInternalServerError, nil, err
 	}
 
+	billingCapture := &relaycommon.ChatBillingCapture{}
+	requestId := ensureChatRelayRequestId(c)
 	relayRequest := httptest.NewRequest(http.MethodPost, "/pg/chat/completions", bytes.NewReader(requestBody))
 	relayRequest = relayRequest.WithContext(c.Request.Context())
 	relayRequest.Header = c.Request.Header.Clone()
 	relayRequest.Header.Set("Content-Type", "application/json")
 	relayRequest.Header.Set("Accept", "text/event-stream")
+	relayRequest.Header.Set(common.RequestIdKey, requestId)
 	relayRequest.ContentLength = int64(len(requestBody))
 
 	writer := newChatStreamCaptureWriter(c.Writer)
@@ -497,16 +530,16 @@ func callChatCompletionRelayStream(c *gin.Context, request *chatCompletionRelayR
 	playgroundRoute := router.Group("/pg")
 	playgroundRoute.Use(middleware.RouteTag("relay"))
 	playgroundRoute.Use(middleware.SystemPerformanceCheck())
-	playgroundRoute.Use(copyChatRelayContext(c), middleware.Distribute())
+	playgroundRoute.Use(copyChatRelayContext(c, billingCapture), middleware.Distribute())
 	playgroundRoute.POST("/chat/completions", Playground)
 	router.ServeHTTP(writer, relayRequest)
 
 	statusCode := writer.StatusCode()
 	responseBody := writer.BodyBytes()
 	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		return responseBody, statusCode, fmt.Errorf("%s", chatRelayErrorMessage(responseBody))
+		return responseBody, statusCode, billingCapture, fmt.Errorf("%s", chatRelayErrorMessage(responseBody))
 	}
-	return responseBody, statusCode, nil
+	return responseBody, statusCode, billingCapture, nil
 }
 
 func parseChatStreamCapture(data []byte) chatStreamCaptureResult {
@@ -545,6 +578,27 @@ func parseChatStreamCapture(data []byte) chatStreamCaptureResult {
 	}
 	result.Content = strings.TrimSpace(result.Content)
 	return result
+}
+
+func chatUsageFromBillingCapture(capture *relaycommon.ChatBillingCapture, fallback chatMessageUsage) chatMessageUsage {
+	if capture == nil {
+		return fallback
+	}
+	if capture.PromptTokens == 0 && capture.CompletionTokens == 0 && capture.TotalTokens == 0 {
+		return fallback
+	}
+	return chatMessageUsage{
+		PromptTokens:     capture.PromptTokens,
+		CompletionTokens: capture.CompletionTokens,
+		TotalTokens:      capture.TotalTokens,
+	}
+}
+
+func chatQuotaFromBillingCapture(capture *relaycommon.ChatBillingCapture) int {
+	if capture == nil {
+		return 0
+	}
+	return capture.Quota
 }
 
 func ListChatConversations(c *gin.Context) {
@@ -628,7 +682,7 @@ func StreamChatMessage(c *gin.Context) {
 	_ = model.TouchChatConversation(userId, conversationId, modelName, group)
 
 	stream := true
-	responseBody, _, err := callChatCompletionRelayStream(c, &chatCompletionRelayRequest{
+	responseBody, _, billingCapture, err := callChatCompletionRelayStream(c, &chatCompletionRelayRequest{
 		Model:       modelName,
 		Group:       group,
 		Messages:    chatMessagesForCompletion(storedMessages, content, contentParts),
@@ -648,6 +702,7 @@ func StreamChatMessage(c *gin.Context) {
 	if streamResult.Content == "" {
 		return
 	}
+	usage := chatUsageFromBillingCapture(billingCapture, streamResult.Usage)
 	assistantModel := streamResult.Model
 	if assistantModel == "" {
 		assistantModel = modelName
@@ -656,8 +711,9 @@ func StreamChatMessage(c *gin.Context) {
 		Role:             model.ChatMessageRoleAssistant,
 		Content:          streamResult.Content,
 		ModelName:        assistantModel,
-		PromptTokens:     streamResult.Usage.PromptTokens,
-		CompletionTokens: streamResult.Usage.CompletionTokens,
+		PromptTokens:     usage.PromptTokens,
+		CompletionTokens: usage.CompletionTokens,
+		Quota:            chatQuotaFromBillingCapture(billingCapture),
 	}
 	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{assistantMessage}); err != nil {
 		common.SysError("save stream chat message error: " + err.Error())
@@ -718,7 +774,7 @@ func StreamChatMessageRegeneration(c *gin.Context) {
 	}
 
 	stream := true
-	responseBody, _, err := callChatCompletionRelayStream(c, &chatCompletionRelayRequest{
+	responseBody, _, billingCapture, err := callChatCompletionRelayStream(c, &chatCompletionRelayRequest{
 		Model:       modelName,
 		Group:       group,
 		Messages:    chatMessagesForStoredCompletion(storedMessages),
@@ -738,6 +794,7 @@ func StreamChatMessageRegeneration(c *gin.Context) {
 	if streamResult.Content == "" {
 		return
 	}
+	usage := chatUsageFromBillingCapture(billingCapture, streamResult.Usage)
 	assistantModel := streamResult.Model
 	if assistantModel == "" {
 		assistantModel = modelName
@@ -746,8 +803,9 @@ func StreamChatMessageRegeneration(c *gin.Context) {
 		Role:             model.ChatMessageRoleAssistant,
 		Content:          streamResult.Content,
 		ModelName:        assistantModel,
-		PromptTokens:     streamResult.Usage.PromptTokens,
-		CompletionTokens: streamResult.Usage.CompletionTokens,
+		PromptTokens:     usage.PromptTokens,
+		CompletionTokens: usage.CompletionTokens,
+		Quota:            chatQuotaFromBillingCapture(billingCapture),
 	}
 	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{assistantMessage}); err != nil {
 		common.SysError("save regenerated chat message error: " + err.Error())
@@ -1022,7 +1080,7 @@ func SendChatMessage(c *gin.Context) {
 	_ = model.TouchChatConversation(userId, conversationId, modelName, group)
 
 	stream := false
-	completion, err := callChatCompletionRelay(c, &chatCompletionRelayRequest{
+	completion, billingCapture, err := callChatCompletionRelay(c, &chatCompletionRelayRequest{
 		Model:       modelName,
 		Group:       group,
 		Messages:    chatMessagesForCompletion(storedMessages, content, contentParts),
@@ -1049,12 +1107,18 @@ func SendChatMessage(c *gin.Context) {
 	if assistantModel == "" {
 		assistantModel = modelName
 	}
+	usage := chatUsageFromBillingCapture(billingCapture, chatMessageUsage{
+		PromptTokens:     completion.Usage.PromptTokens,
+		CompletionTokens: completion.Usage.CompletionTokens,
+		TotalTokens:      completion.Usage.TotalTokens,
+	})
 	assistantMessage := &model.ChatMessage{
 		Role:             model.ChatMessageRoleAssistant,
 		Content:          assistantContent,
 		ModelName:        assistantModel,
-		PromptTokens:     completion.Usage.PromptTokens,
-		CompletionTokens: completion.Usage.CompletionTokens,
+		PromptTokens:     usage.PromptTokens,
+		CompletionTokens: usage.CompletionTokens,
+		Quota:            chatQuotaFromBillingCapture(billingCapture),
 	}
 	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{assistantMessage}); err != nil {
 		common.ApiError(c, err)
@@ -1074,10 +1138,6 @@ func SendChatMessage(c *gin.Context) {
 		Conversation:     conversation,
 		UserMessage:      userMessage,
 		AssistantMessage: assistantMessage,
-		Usage: chatMessageUsage{
-			PromptTokens:     completion.Usage.PromptTokens,
-			CompletionTokens: completion.Usage.CompletionTokens,
-			TotalTokens:      completion.Usage.TotalTokens,
-		},
+		Usage:            usage,
 	})
 }

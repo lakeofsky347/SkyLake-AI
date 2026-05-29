@@ -74,6 +74,11 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 
 	other["admin_info"] = adminInfo
 	appendRequestPath(ctx, relayInfo, other)
+	if ctx != nil {
+		if clientApp := strings.TrimSpace(ctx.GetString("client_app")); clientApp != "" {
+			other["client_app"] = clientApp
+		}
+	}
 	appendRequestConversionChain(relayInfo, other)
 	appendFinalRequestFormat(relayInfo, other)
 	appendBillingInfo(relayInfo, other)
