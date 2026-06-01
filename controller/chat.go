@@ -106,6 +106,12 @@ type chatRelayErrorResponse struct {
 	Error   any    `json:"error"`
 }
 
+const (
+	chatEmptyResponseMessage       = "The model returned an empty response."
+	chatResponseStoppedMessage     = "Generation was stopped before completion."
+	chatResponseInterruptedMessage = "The response stream ended before completion."
+)
+
 type chatStreamCaptureWriter struct {
 	http.ResponseWriter
 	body        bytes.Buffer
@@ -306,7 +312,13 @@ func chatMessageContentForCompletion(message *model.ChatMessage) any {
 func chatMessagesForStoredCompletion(storedMessages []*model.ChatMessage) []dto.Message {
 	messages := make([]dto.Message, 0, len(storedMessages))
 	for _, message := range storedMessages {
+		if message == nil {
+			continue
+		}
 		role := strings.TrimSpace(message.Role)
+		if role == model.ChatMessageRoleAssistant && model.IsRetryableChatMessageStatus(message.Status) {
+			continue
+		}
 		content := chatMessageContentForCompletion(message)
 		if !model.IsValidChatMessageRole(role) {
 			continue
@@ -340,6 +352,24 @@ func lastStoredChatMessage(messages []*model.ChatMessage) *model.ChatMessage {
 		if messages[index] != nil {
 			return messages[index]
 		}
+	}
+	return nil
+}
+
+func lastRetryableUserChatMessage(messages []*model.ChatMessage) *model.ChatMessage {
+	for index := len(messages) - 1; index >= 0; index-- {
+		message := messages[index]
+		if message == nil {
+			continue
+		}
+		role := strings.TrimSpace(message.Role)
+		if role == model.ChatMessageRoleUser {
+			return message
+		}
+		if role == model.ChatMessageRoleAssistant && model.IsRetryableChatMessageStatus(message.Status) {
+			continue
+		}
+		return nil
 	}
 	return nil
 }
@@ -605,6 +635,33 @@ func applyChatBillingCapture(message *model.ChatMessage, capture *relaycommon.Ch
 	message.SubscriptionPlanTitle = capture.SubscriptionPlanTitle
 }
 
+func persistChatAssistantMessage(userId int, conversationId int, message *model.ChatMessage, group string) {
+	if message == nil {
+		return
+	}
+	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{message}); err != nil {
+		common.SysError("save chat assistant message error: " + err.Error())
+		return
+	}
+	if err := model.TouchChatConversation(userId, conversationId, message.ModelName, group); err != nil {
+		common.SysError("touch chat conversation error: " + err.Error())
+	}
+}
+
+func newChatAssistantMessage(modelName string, content string, usage chatMessageUsage, status string, errorMessage string, capture *relaycommon.ChatBillingCapture) *model.ChatMessage {
+	message := &model.ChatMessage{
+		Role:             model.ChatMessageRoleAssistant,
+		Content:          strings.TrimSpace(content),
+		ModelName:        strings.TrimSpace(modelName),
+		PromptTokens:     usage.PromptTokens,
+		CompletionTokens: usage.CompletionTokens,
+		Status:           model.NormalizeChatMessageStatus(status),
+		ErrorMessage:     strings.TrimSpace(errorMessage),
+	}
+	applyChatBillingCapture(message, capture)
+	return message
+}
+
 func ListChatConversations(c *gin.Context) {
 	userId := c.GetInt("id")
 	startIdx, pageSize := parseChatPagination(c)
@@ -695,37 +752,69 @@ func StreamChatMessage(c *gin.Context) {
 		Temperature: req.Temperature,
 		TopP:        req.TopP,
 	})
+	assistantModel := modelName
 	if err != nil {
+		persistChatAssistantMessage(userId, conversationId, newChatAssistantMessage(
+			assistantModel,
+			"",
+			chatMessageUsage{},
+			model.ChatMessageStatusError,
+			err.Error(),
+			billingCapture,
+		), group)
 		return
 	}
 
 	streamResult := parseChatStreamCapture(responseBody)
-	if !streamResult.Done || c.Request.Context().Err() != nil {
-		return
-	}
-	if streamResult.Content == "" {
-		return
-	}
 	usage := chatUsageFromBillingCapture(billingCapture, streamResult.Usage)
-	assistantModel := streamResult.Model
+	assistantModel = streamResult.Model
 	if assistantModel == "" {
 		assistantModel = modelName
 	}
-	assistantMessage := &model.ChatMessage{
-		Role:             model.ChatMessageRoleAssistant,
-		Content:          streamResult.Content,
-		ModelName:        assistantModel,
-		PromptTokens:     usage.PromptTokens,
-		CompletionTokens: usage.CompletionTokens,
+
+	var assistantMessage *model.ChatMessage
+	switch {
+	case c.Request.Context().Err() != nil:
+		assistantMessage = newChatAssistantMessage(
+			assistantModel,
+			streamResult.Content,
+			usage,
+			model.ChatMessageStatusStopped,
+			chatResponseStoppedMessage,
+			billingCapture,
+		)
+	case !streamResult.Done:
+		assistantMessage = newChatAssistantMessage(
+			assistantModel,
+			streamResult.Content,
+			usage,
+			model.ChatMessageStatusError,
+			chatResponseInterruptedMessage,
+			billingCapture,
+		)
+	case streamResult.Content == "":
+		assistantMessage = newChatAssistantMessage(
+			assistantModel,
+			"",
+			usage,
+			model.ChatMessageStatusEmpty,
+			chatEmptyResponseMessage,
+			billingCapture,
+		)
+	default:
+		assistantMessage = newChatAssistantMessage(
+			assistantModel,
+			streamResult.Content,
+			usage,
+			model.ChatMessageStatusCompleted,
+			"",
+			billingCapture,
+		)
 	}
-	applyChatBillingCapture(assistantMessage, billingCapture)
-	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{assistantMessage}); err != nil {
-		common.SysError("save stream chat message error: " + err.Error())
+	if assistantMessage == nil {
 		return
 	}
-	if err := model.TouchChatConversation(userId, conversationId, assistantModel, group); err != nil {
-		common.SysError("touch stream chat conversation error: " + err.Error())
-	}
+	persistChatAssistantMessage(userId, conversationId, assistantMessage, group)
 }
 
 func StreamChatMessageRegeneration(c *gin.Context) {
@@ -755,8 +844,8 @@ func StreamChatMessageRegeneration(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	lastMessage := lastStoredChatMessage(storedMessages)
-	if lastMessage == nil || strings.TrimSpace(lastMessage.Role) != model.ChatMessageRoleUser {
+	lastMessage := lastRetryableUserChatMessage(storedMessages)
+	if lastMessage == nil {
 		common.ApiErrorMsg(c, "last message is not retryable")
 		return
 	}
@@ -787,37 +876,66 @@ func StreamChatMessageRegeneration(c *gin.Context) {
 		Temperature: req.Temperature,
 		TopP:        req.TopP,
 	})
+	assistantModel := modelName
 	if err != nil {
+		persistChatAssistantMessage(userId, conversationId, newChatAssistantMessage(
+			assistantModel,
+			"",
+			chatMessageUsage{},
+			model.ChatMessageStatusError,
+			err.Error(),
+			billingCapture,
+		), group)
 		return
 	}
 
 	streamResult := parseChatStreamCapture(responseBody)
-	if !streamResult.Done || c.Request.Context().Err() != nil {
-		return
-	}
-	if streamResult.Content == "" {
-		return
-	}
 	usage := chatUsageFromBillingCapture(billingCapture, streamResult.Usage)
-	assistantModel := streamResult.Model
+	assistantModel = streamResult.Model
 	if assistantModel == "" {
 		assistantModel = modelName
 	}
-	assistantMessage := &model.ChatMessage{
-		Role:             model.ChatMessageRoleAssistant,
-		Content:          streamResult.Content,
-		ModelName:        assistantModel,
-		PromptTokens:     usage.PromptTokens,
-		CompletionTokens: usage.CompletionTokens,
+
+	var assistantMessage *model.ChatMessage
+	switch {
+	case c.Request.Context().Err() != nil:
+		assistantMessage = newChatAssistantMessage(
+			assistantModel,
+			streamResult.Content,
+			usage,
+			model.ChatMessageStatusStopped,
+			chatResponseStoppedMessage,
+			billingCapture,
+		)
+	case !streamResult.Done:
+		assistantMessage = newChatAssistantMessage(
+			assistantModel,
+			streamResult.Content,
+			usage,
+			model.ChatMessageStatusError,
+			chatResponseInterruptedMessage,
+			billingCapture,
+		)
+	case streamResult.Content == "":
+		assistantMessage = newChatAssistantMessage(
+			assistantModel,
+			"",
+			usage,
+			model.ChatMessageStatusEmpty,
+			chatEmptyResponseMessage,
+			billingCapture,
+		)
+	default:
+		assistantMessage = newChatAssistantMessage(
+			assistantModel,
+			streamResult.Content,
+			usage,
+			model.ChatMessageStatusCompleted,
+			"",
+			billingCapture,
+		)
 	}
-	applyChatBillingCapture(assistantMessage, billingCapture)
-	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{assistantMessage}); err != nil {
-		common.SysError("save regenerated chat message error: " + err.Error())
-		return
-	}
-	if err := model.TouchChatConversation(userId, conversationId, assistantModel, group); err != nil {
-		common.SysError("touch regenerated chat conversation error: " + err.Error())
-	}
+	persistChatAssistantMessage(userId, conversationId, assistantMessage, group)
 }
 
 func CreateChatConversation(c *gin.Context) {
@@ -1094,17 +1212,46 @@ func SendChatMessage(c *gin.Context) {
 		TopP:        req.TopP,
 	})
 	if err != nil {
+		persistChatAssistantMessage(userId, conversationId, newChatAssistantMessage(
+			modelName,
+			"",
+			chatMessageUsage{},
+			model.ChatMessageStatusError,
+			err.Error(),
+			billingCapture,
+		), group)
 		common.ApiErrorMsg(c, err.Error())
 		return
 	}
 	if len(completion.Choices) == 0 {
-		common.ApiErrorMsg(c, "the model returned no choices")
+		persistChatAssistantMessage(userId, conversationId, newChatAssistantMessage(
+			modelName,
+			"",
+			chatMessageUsage{},
+			model.ChatMessageStatusEmpty,
+			chatEmptyResponseMessage,
+			billingCapture,
+		), group)
+		common.ApiErrorMsg(c, chatEmptyResponseMessage)
 		return
 	}
 
 	assistantContent := chatCompletionContentToString(completion.Choices[0].Message.Content)
 	if assistantContent == "" {
-		common.ApiErrorMsg(c, "the model returned an empty response")
+		usage := chatUsageFromBillingCapture(billingCapture, chatMessageUsage{
+			PromptTokens:     completion.Usage.PromptTokens,
+			CompletionTokens: completion.Usage.CompletionTokens,
+			TotalTokens:      completion.Usage.TotalTokens,
+		})
+		persistChatAssistantMessage(userId, conversationId, newChatAssistantMessage(
+			modelName,
+			"",
+			usage,
+			model.ChatMessageStatusEmpty,
+			chatEmptyResponseMessage,
+			billingCapture,
+		), group)
+		common.ApiErrorMsg(c, chatEmptyResponseMessage)
 		return
 	}
 	assistantModel := strings.TrimSpace(completion.Model)
@@ -1116,14 +1263,14 @@ func SendChatMessage(c *gin.Context) {
 		CompletionTokens: completion.Usage.CompletionTokens,
 		TotalTokens:      completion.Usage.TotalTokens,
 	})
-	assistantMessage := &model.ChatMessage{
-		Role:             model.ChatMessageRoleAssistant,
-		Content:          assistantContent,
-		ModelName:        assistantModel,
-		PromptTokens:     usage.PromptTokens,
-		CompletionTokens: usage.CompletionTokens,
-	}
-	applyChatBillingCapture(assistantMessage, billingCapture)
+	assistantMessage := newChatAssistantMessage(
+		assistantModel,
+		assistantContent,
+		usage,
+		model.ChatMessageStatusCompleted,
+		"",
+		billingCapture,
+	)
 	if err := model.CreateChatMessages(userId, conversationId, []*model.ChatMessage{assistantMessage}); err != nil {
 		common.ApiError(c, err)
 		return

@@ -11,6 +11,11 @@ const (
 	ChatMessageRoleSystem    = "system"
 	ChatMessageRoleUser      = "user"
 	ChatMessageRoleAssistant = "assistant"
+
+	ChatMessageStatusCompleted = "completed"
+	ChatMessageStatusError     = "error"
+	ChatMessageStatusStopped   = "stopped"
+	ChatMessageStatusEmpty     = "empty"
 )
 
 type ChatConversation struct {
@@ -39,6 +44,8 @@ type ChatMessage struct {
 	SubscriptionId        int            `json:"subscription_id,omitempty" gorm:"default:0"`
 	SubscriptionPlanId    int            `json:"subscription_plan_id,omitempty" gorm:"default:0"`
 	SubscriptionPlanTitle string         `json:"subscription_plan_title,omitempty" gorm:"type:varchar(128);default:''"`
+	Status                string         `json:"status,omitempty" gorm:"type:varchar(32);default:'';index"`
+	ErrorMessage          string         `json:"error_message,omitempty" gorm:"type:text"`
 	CreatedAt             int64          `json:"created_at" gorm:"autoCreateTime;index:idx_chat_message_conversation_created,priority:2"`
 	DeletedAt             gorm.DeletedAt `gorm:"index"`
 }
@@ -73,6 +80,30 @@ func NormalizeChatTitle(title string) string {
 		return string(titleRunes[:128])
 	}
 	return title
+}
+
+func NormalizeChatMessageStatus(status string) string {
+	switch strings.TrimSpace(strings.ToLower(status)) {
+	case "", ChatMessageStatusCompleted:
+		return ChatMessageStatusCompleted
+	case ChatMessageStatusError:
+		return ChatMessageStatusError
+	case ChatMessageStatusStopped:
+		return ChatMessageStatusStopped
+	case ChatMessageStatusEmpty:
+		return ChatMessageStatusEmpty
+	default:
+		return ChatMessageStatusCompleted
+	}
+}
+
+func IsRetryableChatMessageStatus(status string) bool {
+	switch NormalizeChatMessageStatus(status) {
+	case ChatMessageStatusError, ChatMessageStatusStopped, ChatMessageStatusEmpty:
+		return true
+	default:
+		return false
+	}
 }
 
 func ListChatConversations(userId int, startIdx int, num int) (conversations []*ChatConversation, err error) {

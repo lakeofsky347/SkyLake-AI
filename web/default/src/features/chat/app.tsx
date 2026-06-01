@@ -68,6 +68,7 @@ import type {
   ChatConversation,
   ChatMessage,
   ChatMessageContentPart,
+  ChatMessageStatus,
   ChatRole,
 } from './types'
 
@@ -108,6 +109,12 @@ type ChatStoredDraft = {
 type ChatResponseFailure = {
   conversationId: number
   message: string
+}
+
+type ChatMessageStateMeta = {
+  label: string
+  detail: string
+  tone: 'default' | 'warning' | 'destructive'
 }
 
 function getStatusValue<T>(status: SystemStatus | null, key: string) {
@@ -195,6 +202,69 @@ function getChatMessageBillingSourceLabel(
     return planTitle ? `${t('Subscription')}: ${planTitle}` : t('Subscription')
   }
   return source
+}
+
+function normalizeChatMessageStatus(message: ChatMessage): ChatMessageStatus {
+  const status = String(message.status || '')
+    .trim()
+    .toLowerCase()
+  switch (status) {
+    case 'error':
+    case 'stopped':
+    case 'empty':
+    case 'streaming':
+    case 'completed':
+      return status
+    default:
+      return 'completed'
+  }
+}
+
+function isRetryableChatMessageStatus(status?: string) {
+  return ['error', 'stopped', 'empty'].includes(
+    String(status || '')
+      .trim()
+      .toLowerCase()
+  )
+}
+
+function getChatMessageStateMeta(
+  message: ChatMessage,
+  t: (key: string) => string
+): ChatMessageStateMeta | null {
+  if (message.role !== 'assistant') return null
+
+  switch (normalizeChatMessageStatus(message)) {
+    case 'streaming':
+      return {
+        label: t('Generating...'),
+        detail: '',
+        tone: 'default',
+      }
+    case 'error':
+      return {
+        label: t('Response failed'),
+        detail: message.error_message || t('Request failed'),
+        tone: 'destructive',
+      }
+    case 'stopped':
+      return {
+        label: t('Response stopped'),
+        detail:
+          message.error_message ||
+          t('Generation was stopped before completion.'),
+        tone: 'warning',
+      }
+    case 'empty':
+      return {
+        label: t('Empty response'),
+        detail:
+          message.error_message || t('The model returned an empty response.'),
+        tone: 'warning',
+      }
+    default:
+      return null
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -311,7 +381,8 @@ function createPendingMessage(
   role: ChatRole,
   content: string,
   model: string,
-  contentParts?: ChatMessageContentPart[]
+  contentParts?: ChatMessageContentPart[],
+  status?: ChatMessageStatus
 ): ChatMessage {
   return {
     id: -Date.now() - (role === 'assistant' ? 1 : 0),
@@ -324,6 +395,7 @@ function createPendingMessage(
     prompt_tokens: 0,
     completion_tokens: 0,
     quota: 0,
+    status: status || (role === 'assistant' ? 'streaming' : 'completed'),
     created_at: Math.floor(Date.now() / 1000),
   }
 }
@@ -391,8 +463,20 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
     contentParts.length > 0
       ? textParts.filter(Boolean).join('\n\n')
       : message.content
+  const stateMeta = getChatMessageStateMeta(message, t)
+  const normalizedStatus = normalizeChatMessageStatus(message)
+  const displayTextContent =
+    textContent || (!isUser && stateMeta ? stateMeta.detail : '')
   const tokenUsage = getChatMessageTokenUsage(message)
   const billingSourceLabel = getChatMessageBillingSourceLabel(message, t)
+  const showStateDetail =
+    !!stateMeta?.detail && !!textContent && stateMeta.detail !== textContent
+  const shouldShowNoCharge =
+    !isUser &&
+    !!stateMeta &&
+    normalizedStatus !== 'streaming' &&
+    !tokenUsage &&
+    Math.max(0, Number(message.quota) || 0) <= 0
 
   return (
     <div
@@ -414,14 +498,16 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
             : 'bg-muted text-foreground'
         )}
       >
-        {textContent &&
+        {displayTextContent &&
           (message.role === 'assistant' ? (
-            <Markdown className='prose-p:my-0'>{textContent}</Markdown>
+            <Markdown className='prose-p:my-0'>{displayTextContent}</Markdown>
           ) : (
-            <div className='break-words whitespace-pre-wrap'>{textContent}</div>
+            <div className='break-words whitespace-pre-wrap'>
+              {displayTextContent}
+            </div>
           ))}
         {imageParts.length > 0 && (
-          <div className={cn('grid gap-2', textContent && 'mt-2')}>
+          <div className={cn('grid gap-2', displayTextContent && 'mt-2')}>
             {imageParts.map((part, index) => (
               <a
                 key={`${part.image_url.url}-${index}`}
@@ -438,7 +524,7 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
             ))}
           </div>
         )}
-        {tokenUsage && (
+        {(stateMeta || tokenUsage) && (
           <div
             className={cn(
               'mt-2 flex flex-wrap gap-x-2 gap-y-1 border-t pt-2 text-[11px] leading-4',
@@ -447,21 +533,39 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
                 : 'border-border text-muted-foreground'
             )}
           >
-            {tokenUsage.promptTokens > 0 && (
+            {stateMeta && (
+              <span
+                className={cn(
+                  'font-medium',
+                  stateMeta.tone === 'destructive' &&
+                    (isUser ? 'text-primary-foreground' : 'text-destructive'),
+                  stateMeta.tone === 'warning' &&
+                    (isUser
+                      ? 'text-primary-foreground'
+                      : 'text-amber-700 dark:text-amber-400')
+                )}
+              >
+                {stateMeta.label}
+              </span>
+            )}
+            {showStateDetail && <span>{stateMeta?.detail}</span>}
+            {tokenUsage && tokenUsage.promptTokens > 0 && (
               <span>
                 {t('Input tokens')}: {formatTokenCount(tokenUsage.promptTokens)}
               </span>
             )}
-            {tokenUsage.completionTokens > 0 && (
+            {tokenUsage && tokenUsage.completionTokens > 0 && (
               <span>
                 {t('Output tokens')}:{' '}
                 {formatTokenCount(tokenUsage.completionTokens)}
               </span>
             )}
-            <span>
-              {t('Total tokens')}: {formatTokenCount(tokenUsage.totalTokens)}
-            </span>
-            {tokenUsage.quota > 0 && (
+            {tokenUsage && (
+              <span>
+                {t('Total tokens')}: {formatTokenCount(tokenUsage.totalTokens)}
+              </span>
+            )}
+            {tokenUsage && tokenUsage.quota > 0 && (
               <span>
                 {t('Fee')}: {formatLogQuota(tokenUsage.quota)}
               </span>
@@ -471,6 +575,7 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
                 {t('Billing Source')}: {billingSourceLabel}
               </span>
             )}
+            {shouldShowNoCharge && <span>{t('No charge recorded')}</span>}
           </div>
         )}
       </div>
@@ -565,6 +670,7 @@ export function ChatApp() {
   })
 
   const storedMessages = messagesQuery.data?.data ?? []
+  const lastStoredMessage = storedMessages.at(-1)
   const visibleMessages = useMemo(
     () => [...storedMessages, ...pendingMessages],
     [pendingMessages, storedMessages]
@@ -692,6 +798,30 @@ export function ChatApp() {
     }
   }, [groups, selectedGroup])
 
+  useEffect(() => {
+    if (activeConversationId === null) {
+      setResponseFailure(null)
+      return
+    }
+    if (isGenerating) {
+      return
+    }
+    if (
+      lastStoredMessage?.role === 'assistant' &&
+      isRetryableChatMessageStatus(lastStoredMessage.status)
+    ) {
+      setResponseFailure({
+        conversationId: activeConversationId,
+        message:
+          lastStoredMessage.error_message ||
+          getChatMessageStateMeta(lastStoredMessage, t)?.detail ||
+          t('Failed to send message'),
+      })
+      return
+    }
+    setResponseFailure(null)
+  }, [activeConversationId, isGenerating, lastStoredMessage, t])
+
   async function refreshChatData(conversationId: number) {
     await Promise.all([
       queryClient.invalidateQueries({
@@ -711,7 +841,16 @@ export function ChatApp() {
   ) {
     const response = await getChatMessages(conversationId)
     const lastMessage = response.data?.at(-1)
-    if (response.success && lastMessage?.role === 'user') {
+    if (
+      response.success &&
+      lastMessage?.role === 'assistant' &&
+      isRetryableChatMessageStatus(lastMessage.status)
+    ) {
+      setResponseFailure({
+        conversationId,
+        message: lastMessage.error_message || message,
+      })
+    } else if (response.success && lastMessage?.role === 'user') {
       setResponseFailure({
         conversationId,
         message,
@@ -959,7 +1098,9 @@ export function ChatApp() {
     const assistantPlaceholder = createPendingMessage(
       'assistant',
       thinkingText,
-      selectedModel
+      selectedModel,
+      undefined,
+      'streaming'
     )
     setPendingMessages([userMessage, assistantPlaceholder])
 
@@ -1040,7 +1181,9 @@ export function ChatApp() {
     const assistantPlaceholder = createPendingMessage(
       'assistant',
       thinkingText,
-      selectedModel
+      selectedModel,
+      undefined,
+      'streaming'
     )
     setPendingMessages([assistantPlaceholder])
 

@@ -19,6 +19,13 @@ For commercial licensing, please contact support@quantumnous.com
 
 export type ChatRole = 'system' | 'user' | 'assistant'
 
+export type ChatMessageStatus =
+  | 'completed'
+  | 'error'
+  | 'stopped'
+  | 'empty'
+  | 'streaming'
+
 export type ChatMessageContentPart =
   | {
       type: 'text'
@@ -57,6 +64,8 @@ export type ChatMessage = {
   subscription_id?: number
   subscription_plan_id?: number
   subscription_plan_title?: string
+  status?: ChatMessageStatus
+  error_message?: string
   created_at: number
 }
 

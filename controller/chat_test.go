@@ -62,6 +62,48 @@ func TestChatMessagesForCompletionWithStoredParts(t *testing.T) {
 	}
 }
 
+func TestChatMessagesForStoredCompletionSkipsRetryableAssistantMessages(t *testing.T) {
+	messages := chatMessagesForStoredCompletion([]*model.ChatMessage{
+		{Role: model.ChatMessageRoleUser, Content: "first question"},
+		{
+			Role:         model.ChatMessageRoleAssistant,
+			Content:      "partial answer",
+			Status:       model.ChatMessageStatusStopped,
+			ErrorMessage: chatResponseStoppedMessage,
+		},
+		{
+			Role:    model.ChatMessageRoleAssistant,
+			Content: "final answer",
+			Status:  model.ChatMessageStatusCompleted,
+		},
+	})
+
+	if len(messages) != 2 {
+		t.Fatalf("len(messages) = %d, want 2", len(messages))
+	}
+	if messages[1].Content != "final answer" {
+		t.Fatalf("completed assistant content = %#v", messages[1].Content)
+	}
+}
+
+func TestLastRetryableUserChatMessageSkipsRetryableAssistantTail(t *testing.T) {
+	last := lastRetryableUserChatMessage([]*model.ChatMessage{
+		{Role: model.ChatMessageRoleUser, Content: "question", ModelName: "gpt-test"},
+		{
+			Role:         model.ChatMessageRoleAssistant,
+			Content:      "",
+			Status:       model.ChatMessageStatusError,
+			ErrorMessage: "upstream failed",
+		},
+	})
+	if last == nil {
+		t.Fatal("lastRetryableUserChatMessage returned nil")
+	}
+	if last.Role != model.ChatMessageRoleUser || last.Content != "question" {
+		t.Fatalf("lastRetryableUserChatMessage = %#v", last)
+	}
+}
+
 func TestNormalizeChatMessageContentWithImageURL(t *testing.T) {
 	summary, parts, partsJSON, err := normalizeChatMessageContent("  describe this  ", []chatMessageContentPartRequest{
 		{

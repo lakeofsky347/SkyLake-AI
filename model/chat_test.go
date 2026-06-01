@@ -34,3 +34,38 @@ func TestIsValidChatMessageRole(t *testing.T) {
 		t.Fatal("role tool should be invalid")
 	}
 }
+
+func TestNormalizeChatMessageStatus(t *testing.T) {
+	testCases := map[string]string{
+		"":          ChatMessageStatusCompleted,
+		"completed": ChatMessageStatusCompleted,
+		"ERROR":     ChatMessageStatusError,
+		"stopped":   ChatMessageStatusStopped,
+		"empty":     ChatMessageStatusEmpty,
+		"unknown":   ChatMessageStatusCompleted,
+	}
+
+	for input, expected := range testCases {
+		if got := NormalizeChatMessageStatus(input); got != expected {
+			t.Fatalf("NormalizeChatMessageStatus(%q) = %q, want %q", input, got, expected)
+		}
+	}
+}
+
+func TestIsRetryableChatMessageStatus(t *testing.T) {
+	for _, status := range []string{
+		ChatMessageStatusError,
+		ChatMessageStatusStopped,
+		ChatMessageStatusEmpty,
+	} {
+		if !IsRetryableChatMessageStatus(status) {
+			t.Fatalf("IsRetryableChatMessageStatus(%q) = false, want true", status)
+		}
+	}
+
+	for _, status := range []string{"", ChatMessageStatusCompleted} {
+		if IsRetryableChatMessageStatus(status) {
+			t.Fatalf("IsRetryableChatMessageStatus(%q) = true, want false", status)
+		}
+	}
+}
