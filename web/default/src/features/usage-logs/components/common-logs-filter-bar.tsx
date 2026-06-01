@@ -90,6 +90,9 @@ export function CommonLogsFilterBar<TData>(
     if (searchParams.requestId) next.requestId = searchParams.requestId
     if (searchParams.upstreamRequestId)
       next.upstreamRequestId = searchParams.upstreamRequestId
+    if (searchParams.clientApp) next.clientApp = searchParams.clientApp
+    if (searchParams.billingSource)
+      next.billingSource = searchParams.billingSource
 
     if (Object.keys(next).length > 0) {
       setFilters((prev) => ({ ...prev, ...next }))
@@ -109,6 +112,8 @@ export function CommonLogsFilterBar<TData>(
     searchParams.username,
     searchParams.requestId,
     searchParams.upstreamRequestId,
+    searchParams.clientApp,
+    searchParams.billingSource,
     searchParams.type,
   ])
 
@@ -168,7 +173,12 @@ export function CommonLogsFilterBar<TData>(
     !!filters.upstreamRequestId
 
   const hasAdditionalFilters =
-    !!filters.model || !!filters.group || !!logType || hasExpandedFilters
+    !!filters.model ||
+    !!filters.group ||
+    !!filters.clientApp ||
+    !!filters.billingSource ||
+    !!logType ||
+    hasExpandedFilters
 
   const inputClass = 'w-full sm:w-[140px] lg:w-[160px]'
   const sensitiveType = sensitiveVisible ? 'text' : 'password'
@@ -229,6 +239,55 @@ export function CommonLogsFilterBar<TData>(
             onKeyDown={handleKeyDown}
             className={inputClass}
           />
+          <Select
+            items={[
+              { value: 'all', label: t('All') },
+              { value: 'chat', label: t('Chat') },
+              { value: 'api', label: t('API') },
+            ]}
+            value={filters.clientApp || ''}
+            onValueChange={(value) =>
+              handleChange('clientApp', value && value !== 'all' ? value : '')
+            }
+          >
+            <SelectTrigger className={inputClass}>
+              <SelectValue placeholder={t('App')} />
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              <SelectGroup>
+                <SelectItem value='all'>{t('All')}</SelectItem>
+                <SelectItem value='chat'>{t('Chat')}</SelectItem>
+                <SelectItem value='api'>{t('API')}</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Select
+            items={[
+              { value: 'all', label: t('All') },
+              { value: 'wallet', label: t('Wallet') },
+              { value: 'subscription', label: t('Subscription') },
+            ]}
+            value={filters.billingSource || ''}
+            onValueChange={(value) =>
+              handleChange(
+                'billingSource',
+                value && value !== 'all' ? value : ''
+              )
+            }
+          >
+            <SelectTrigger className={inputClass}>
+              <SelectValue placeholder={t('Billing Source')} />
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              <SelectGroup>
+                <SelectItem value='all'>{t('All')}</SelectItem>
+                <SelectItem value='wallet'>{t('Wallet')}</SelectItem>
+                <SelectItem value='subscription'>
+                  {t('Subscription')}
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
           <Select
             items={[
               { value: 'all', label: t('All Types') },
@@ -297,9 +356,7 @@ export function CommonLogsFilterBar<TData>(
           <Input
             placeholder={t('Upstream Request ID')}
             value={filters.upstreamRequestId || ''}
-            onChange={(e) =>
-              handleChange('upstreamRequestId', e.target.value)
-            }
+            onChange={(e) => handleChange('upstreamRequestId', e.target.value)}
             onKeyDown={handleKeyDown}
             className={inputClass}
           />

@@ -66,6 +66,9 @@ func geminiRelayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewA
 }
 
 func Relay(c *gin.Context, relayFormat types.RelayFormat) {
+	if strings.TrimSpace(c.GetString("client_app")) == "" {
+		c.Set("client_app", "api")
+	}
 
 	requestId := c.GetString(common.RequestIdKey)
 	//group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)

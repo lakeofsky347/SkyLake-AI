@@ -207,6 +207,12 @@ export function buildApiParams(config: {
     ...(searchParams.upstreamRequestId
       ? { upstream_request_id: String(searchParams.upstreamRequestId) }
       : {}),
+    ...(searchParams.clientApp
+      ? { client_app: String(searchParams.clientApp) }
+      : {}),
+    ...(searchParams.billingSource
+      ? { billing_source: String(searchParams.billingSource) }
+      : {}),
     ...buildTimeRangeParams(searchParams, false),
   }
 
