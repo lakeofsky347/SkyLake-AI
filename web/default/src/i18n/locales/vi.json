@@ -3848,6 +3848,7 @@
     "Subscription plans do NOT use the bound Product — each plan has its own dedicated Pancake product, set in the Subscriptions admin (or auto-minted via the \"+ Create\" button there).": "C?c g?i ??ng k? KH?NG d?ng s?n ph?m ?? li?n k?t ? m?i g?i c? m?t s?n ph?m Pancake ri?ng, ???c ??t trong trang qu?n tr? ??ng k? (ho?c t? ??ng t?o b?ng n?t \"+ T?o\" ? ??).",
     "Subscription-friendly": "Phù hợp gói đăng ký",
     "Subtract": "Trừ",
+    "Super Admin": "Siêu quản trị viên",
     "Success": "Thành công",
     "Success rate": "Tỷ lệ thành công",
     "Successfully created {{count}} API Key(s)": "Đã tạo thành công {{count}} khóa API",

@@ -12,11 +12,11 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/oauth"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
-	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -52,7 +52,7 @@ func GetStatus(c *gin.Context) {
 	data := gin.H{
 		"version":                     common.Version,
 		"start_time":                  common.StartTime,
-		"email_verification":          common.EmailVerificationEnabled,
+		"email_verification":          true,
 		"github_oauth":                common.GitHubOAuthEnabled,
 		"github_client_id":            common.GitHubClientId,
 		"discord_oauth":               system_setting.GetDiscordSettings().Enabled,
@@ -74,26 +74,26 @@ func GetStatus(c *gin.Context) {
 		"docs_link":                   operation_setting.GetGeneralSetting().DocsLink,
 		"quota_per_unit":              common.QuotaPerUnit,
 		// 兼容旧前端：保留 display_in_currency，同时提供新的 quota_display_type
-		"display_in_currency":           operation_setting.IsCurrencyDisplay(),
-		"quota_display_type":            operation_setting.GetQuotaDisplayType(),
-		"custom_currency_symbol":        operation_setting.GetGeneralSetting().CustomCurrencySymbol,
-		"custom_currency_exchange_rate": operation_setting.GetGeneralSetting().CustomCurrencyExchangeRate,
-		"enable_batch_update":           common.BatchUpdateEnabled,
-		"enable_drawing":                common.DrawingEnabled,
-		"enable_task":                   common.TaskEnabled,
-		"enable_data_export":            common.DataExportEnabled,
-		"data_export_default_time":      common.DataExportDefaultTime,
-		"default_collapse_sidebar":      common.DefaultCollapseSidebar,
-		"mj_notify_enabled":             setting.MjNotifyEnabled,
-		"chats":                         setting.Chats,
+		"display_in_currency":                       operation_setting.IsCurrencyDisplay(),
+		"quota_display_type":                        operation_setting.GetQuotaDisplayType(),
+		"custom_currency_symbol":                    operation_setting.GetGeneralSetting().CustomCurrencySymbol,
+		"custom_currency_exchange_rate":             operation_setting.GetGeneralSetting().CustomCurrencyExchangeRate,
+		"enable_batch_update":                       common.BatchUpdateEnabled,
+		"enable_drawing":                            common.DrawingEnabled,
+		"enable_task":                               common.TaskEnabled,
+		"enable_data_export":                        common.DataExportEnabled,
+		"data_export_default_time":                  common.DataExportDefaultTime,
+		"default_collapse_sidebar":                  common.DefaultCollapseSidebar,
+		"mj_notify_enabled":                         setting.MjNotifyEnabled,
+		"chats":                                     setting.Chats,
 		"chat_attachment_max_image_count":           system_setting.GetChatAttachmentMaxImageCount(),
 		"chat_attachment_max_image_file_size_bytes": system_setting.GetChatAttachmentMaxImageFileSizeBytes(),
 		"chat_attachment_allowed_image_mime_types":  service.GetAllowedChatAttachmentImageMimeTypes(),
-		"demo_site_enabled":             operation_setting.DemoSiteEnabled,
-		"self_use_mode_enabled":         operation_setting.SelfUseModeEnabled,
-		"register_enabled":              common.RegisterEnabled,
-		"password_register_enabled":     common.PasswordRegisterEnabled,
-		"default_use_auto_group":        setting.DefaultUseAutoGroup,
+		"demo_site_enabled":                         operation_setting.DemoSiteEnabled,
+		"self_use_mode_enabled":                     operation_setting.SelfUseModeEnabled,
+		"register_enabled":                          common.RegisterEnabled,
+		"password_register_enabled":                 common.PasswordRegisterEnabled,
+		"default_use_auto_group":                    setting.DefaultUseAutoGroup,
 
 		"usd_exchange_rate": operation_setting.USDExchangeRate,
 		"price":             operation_setting.Price,
@@ -235,7 +235,7 @@ func GetHomePageContent(c *gin.Context) {
 }
 
 func SendEmailVerification(c *gin.Context) {
-	email := c.Query("email")
+	email := strings.TrimSpace(c.Query("email"))
 	if err := common.Validate.Var(email, "required,email"); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,

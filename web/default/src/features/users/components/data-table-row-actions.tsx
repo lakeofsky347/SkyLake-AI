@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { UserSubscriptionsDialog } from '@/features/subscriptions/components/dialogs/user-subscriptions-dialog'
+import { useAuthStore } from '@/stores/auth-store'
 import { manageUser, resetUserPasskey, resetUserTwoFA } from '../api'
 import {
   USER_STATUS,
@@ -64,6 +65,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const { t } = useTranslation()
   const user = row.original
   const { setOpen, setCurrentRow, triggerRefresh } = useUsers()
+  const currentUserRole = useAuthStore((state) => state.auth.user?.role ?? 0)
   const [resetPasskeyOpen, setResetPasskeyOpen] = useState(false)
   const [resetTwoFAOpen, setResetTwoFAOpen] = useState(false)
   const [bindingDialogOpen, setBindingDialogOpen] = useState(false)
@@ -129,6 +131,11 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
 
   const isDisabled = user.status === USER_STATUS.DISABLED
   const isAdmin = user.role >= USER_ROLE.ADMIN
+  const isRoot = user.role >= USER_ROLE.ROOT
+  const currentUserIsRoot = currentUserRole >= USER_ROLE.ROOT
+  const canManageUser = currentUserIsRoot || user.role < USER_ROLE.ADMIN
+  const canPromote = currentUserIsRoot && !isAdmin
+  const canDemote = currentUserIsRoot && isAdmin && !isRoot
 
   if (isUserDeleted(user)) {
     return null
@@ -149,32 +156,35 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           <span className='sr-only'>{t('Open menu')}</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end' className='w-[180px]'>
-          <DropdownMenuItem onClick={handleEdit}>
-            {t('Edit')}
-            <DropdownMenuShortcut>
-              <Pencil size={16} />
-            </DropdownMenuShortcut>
-          </DropdownMenuItem>
-
-          <DropdownMenuSeparator />
-
-          {isDisabled ? (
-            <DropdownMenuItem onClick={() => handleManage('enable')}>
-              {t('Enable')}
+          {canManageUser && (
+            <DropdownMenuItem onClick={handleEdit}>
+              {t('Edit')}
               <DropdownMenuShortcut>
-                <Power size={16} />
-              </DropdownMenuShortcut>
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem onClick={() => handleManage('disable')}>
-              {t('Disable')}
-              <DropdownMenuShortcut>
-                <PowerOff size={16} />
+                <Pencil size={16} />
               </DropdownMenuShortcut>
             </DropdownMenuItem>
           )}
 
-          {isAdmin && (
+          <DropdownMenuSeparator />
+
+          {canManageUser &&
+            (isDisabled ? (
+              <DropdownMenuItem onClick={() => handleManage('enable')}>
+                {t('Enable')}
+                <DropdownMenuShortcut>
+                  <Power size={16} />
+                </DropdownMenuShortcut>
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onClick={() => handleManage('disable')}>
+                {t('Disable')}
+                <DropdownMenuShortcut>
+                  <PowerOff size={16} />
+                </DropdownMenuShortcut>
+              </DropdownMenuItem>
+            ))}
+
+          {canDemote && (
             <DropdownMenuItem onClick={() => handleManage('demote')}>
               {t('Demote')}
               <DropdownMenuShortcut>
@@ -183,7 +193,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
             </DropdownMenuItem>
           )}
 
-          {!isAdmin && (
+          {canPromote && (
             <DropdownMenuItem onClick={() => handleManage('promote')}>
               {t('Promote')}
               <DropdownMenuShortcut>
@@ -192,17 +202,19 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
             </DropdownMenuItem>
           )}
 
-          <DropdownMenuItem
-            onSelect={(event) => {
-              event.preventDefault()
-              setBindingDialogOpen(true)
-            }}
-          >
-            {t('Manage Bindings')}
-            <DropdownMenuShortcut>
-              <Link2 size={16} />
-            </DropdownMenuShortcut>
-          </DropdownMenuItem>
+          {canManageUser && (
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault()
+                setBindingDialogOpen(true)
+              }}
+            >
+              {t('Manage Bindings')}
+              <DropdownMenuShortcut>
+                <Link2 size={16} />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
 
           <DropdownMenuItem
             onSelect={(event) => {
@@ -218,41 +230,47 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
 
           <DropdownMenuSeparator />
 
-          <DropdownMenuItem
-            onSelect={(event) => {
-              event.preventDefault()
-              setResetPasskeyOpen(true)
-            }}
-          >
-            {t('Reset Passkey')}
-            <DropdownMenuShortcut>
-              <KeyRound size={16} />
-            </DropdownMenuShortcut>
-          </DropdownMenuItem>
+          {canManageUser && (
+            <>
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault()
+                  setResetPasskeyOpen(true)
+                }}
+              >
+                {t('Reset Passkey')}
+                <DropdownMenuShortcut>
+                  <KeyRound size={16} />
+                </DropdownMenuShortcut>
+              </DropdownMenuItem>
 
-          <DropdownMenuItem
-            onSelect={(event) => {
-              event.preventDefault()
-              setResetTwoFAOpen(true)
-            }}
-          >
-            {t('Reset 2FA')}
-            <DropdownMenuShortcut>
-              <ShieldAlert size={16} />
-            </DropdownMenuShortcut>
-          </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault()
+                  setResetTwoFAOpen(true)
+                }}
+              >
+                {t('Reset 2FA')}
+                <DropdownMenuShortcut>
+                  <ShieldAlert size={16} />
+                </DropdownMenuShortcut>
+              </DropdownMenuItem>
+            </>
+          )}
 
           <DropdownMenuSeparator />
 
-          <DropdownMenuItem
-            onClick={handleDelete}
-            className='text-destructive focus:text-destructive'
-          >
-            {t('Delete')}
-            <DropdownMenuShortcut>
-              <Trash2 size={16} />
-            </DropdownMenuShortcut>
-          </DropdownMenuItem>
+          {canManageUser && !isRoot && (
+            <DropdownMenuItem
+              onClick={handleDelete}
+              className='text-destructive focus:text-destructive'
+            >
+              {t('Delete')}
+              <DropdownMenuShortcut>
+                <Trash2 size={16} />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

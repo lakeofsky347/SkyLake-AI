@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { TFunction } from 'i18next'
+import { ROLE } from '@/lib/roles'
 import {
   Activity,
   Box,
@@ -134,6 +135,7 @@ export function getAdminNavGroups(t: TFunction): NavGroup[] {
           title: t('System Settings'),
           url: '/admin/system-settings/site',
           activeUrls: ['/admin/system-settings'],
+          minRole: ROLE.ROOT,
           icon: Settings,
         },
       ],
@@ -161,4 +163,3 @@ export function getChatNavGroups(t: TFunction): NavGroup[] {
     },
   ]
 }
-

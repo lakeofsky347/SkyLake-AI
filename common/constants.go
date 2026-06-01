@@ -187,21 +187,25 @@ const (
 	RoleGuestUser  = 0
 	RoleCommonUser = 1
 	RoleAdminUser  = 10
-	// Legacy installs may still have role=100 users. Treat them as admins,
-	// but do not expose or create a separate super-admin role anymore.
-	RoleLegacyRootUser = 100
+	RoleRootUser   = 100
+	// Backward-compatible alias for installs that still reference the old name.
+	RoleLegacyRootUser = RoleRootUser
 )
 
 func IsValidateRole(role int) bool {
-	return role == RoleGuestUser || role == RoleCommonUser || role == RoleAdminUser || role == RoleLegacyRootUser
+	return role == RoleGuestUser || role == RoleCommonUser || role == RoleAdminUser || role == RoleRootUser
 }
 
 func IsAdminRole(role int) bool {
 	return role >= RoleAdminUser
 }
 
+func IsRootRole(role int) bool {
+	return role >= RoleRootUser
+}
+
 func IsAssignableRole(role int) bool {
-	return role == RoleCommonUser || role == RoleAdminUser
+	return role == RoleCommonUser || role == RoleAdminUser || role == RoleRootUser
 }
 
 var (

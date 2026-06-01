@@ -3848,6 +3848,7 @@
     "Subscription plans do NOT use the bound Product — each plan has its own dedicated Pancake product, set in the Subscriptions admin (or auto-minted via the \"+ Create\" button there).": "Les forfaits d?abonnement n?utilisent PAS le produit associ? ? chaque forfait poss?de son propre produit Pancake, d?fini dans l?administration des abonnements (ou cr?? automatiquement via le bouton ? + Cr?er ?).",
     "Subscription-friendly": "Adapte aux abonnements",
     "Subtract": "Soustraire",
+    "Super Admin": "Super administrateur",
     "Success": "Succès",
     "Success rate": "Taux de réussite",
     "Successfully created {{count}} API Key(s)": "{{count}} clé(s) API créée(s) avec succès",
