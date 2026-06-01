@@ -18,7 +18,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open("file:service-test?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		panic("failed to open test db: " + err.Error())
 	}
@@ -26,7 +26,8 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic("failed to get sql.DB: " + err.Error())
 	}
-	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(4)
+	sqlDB.SetMaxOpenConns(4)
 
 	model.DB = db
 	model.LOG_DB = db
@@ -43,7 +44,9 @@ func TestMain(m *testing.M) {
 		&model.Log{},
 		&model.Channel{},
 		&model.TopUp{},
+		&model.SubscriptionPlan{},
 		&model.UserSubscription{},
+		&model.SubscriptionPreConsumeRecord{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}
@@ -64,7 +67,9 @@ func truncate(t *testing.T) {
 		model.DB.Exec("DELETE FROM logs")
 		model.DB.Exec("DELETE FROM channels")
 		model.DB.Exec("DELETE FROM top_ups")
+		model.DB.Exec("DELETE FROM subscription_pre_consume_records")
 		model.DB.Exec("DELETE FROM user_subscriptions")
+		model.DB.Exec("DELETE FROM subscription_plans")
 	})
 }
 
@@ -93,6 +98,37 @@ func seedSubscription(t *testing.T, id int, userId int, amountTotal int64, amoun
 	sub := &model.UserSubscription{
 		Id:          id,
 		UserId:      userId,
+		AmountTotal: amountTotal,
+		AmountUsed:  amountUsed,
+		Status:      "active",
+		StartTime:   time.Now().Unix(),
+		EndTime:     time.Now().Add(30 * 24 * time.Hour).Unix(),
+	}
+	require.NoError(t, model.DB.Create(sub).Error)
+}
+
+func seedSubscriptionPlan(t *testing.T, id int, title string, totalAmount int64) {
+	t.Helper()
+	plan := &model.SubscriptionPlan{
+		Id:               id,
+		Title:            title,
+		PriceAmount:      9.9,
+		Currency:         "USD",
+		DurationUnit:     model.SubscriptionDurationMonth,
+		DurationValue:    1,
+		Enabled:          true,
+		TotalAmount:      totalAmount,
+		QuotaResetPeriod: model.SubscriptionResetNever,
+	}
+	require.NoError(t, model.DB.Create(plan).Error)
+}
+
+func seedSubscriptionWithPlan(t *testing.T, id int, userId int, planId int, amountTotal int64, amountUsed int64) {
+	t.Helper()
+	sub := &model.UserSubscription{
+		Id:          id,
+		UserId:      userId,
+		PlanId:      planId,
 		AmountTotal: amountTotal,
 		AmountUsed:  amountUsed,
 		Status:      "active",
