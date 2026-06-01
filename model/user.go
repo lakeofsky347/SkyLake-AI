@@ -127,7 +127,8 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 		"personal": true,
 	}
 
-	// Admin area - admin is the highest role and can access all management modules.
+	// Admin area - administrators can access management modules; root-only
+	// settings are exposed only for super administrators.
 	if common.IsAdminRole(userRole) {
 		defaultConfig["admin"] = map[string]interface{}{
 			"enabled":      true,
@@ -136,7 +137,7 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 			"redemption":   true,
 			"user":         true,
 			"subscription": true,
-			"setting":      true,
+			"setting":      common.IsRootRole(userRole),
 		}
 	}
 	// 普通用户不包含admin区域
@@ -935,7 +936,7 @@ func DeltaUpdateUserQuota(id int, delta int) (err error) {
 }
 
 func GetRootUser() (user *User) {
-	DB.Where("role >= ?", common.RoleAdminUser).Order("role desc, id asc").First(&user)
+	DB.Where("role >= ?", common.RoleRootUser).Order("role desc, id asc").First(&user)
 	return user
 }
 
@@ -1034,7 +1035,7 @@ func (user *User) FillUserByLinuxDOId() error {
 
 func RootUserExists() bool {
 	var user User
-	err := DB.Where("role >= ?", common.RoleAdminUser).First(&user).Error
+	err := DB.Where("role >= ?", common.RoleRootUser).First(&user).Error
 	if err != nil {
 		return false
 	}

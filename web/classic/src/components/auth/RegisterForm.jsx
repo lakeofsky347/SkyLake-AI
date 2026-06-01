@@ -133,18 +133,18 @@ const RegisterForm = () => {
     (status.custom_oauth_providers || []).length > 0;
   const hasOAuthRegisterOptions = Boolean(
     status.github_oauth ||
-      status.discord_oauth ||
-      status.oidc_enabled ||
-      status.wechat_login ||
-      status.linuxdo_oauth ||
-      status.telegram_oauth ||
-      hasCustomOAuthProviders,
+    status.discord_oauth ||
+    status.oidc_enabled ||
+    status.wechat_login ||
+    status.linuxdo_oauth ||
+    status.telegram_oauth ||
+    hasCustomOAuthProviders,
   );
 
-  const [showEmailVerification, setShowEmailVerification] = useState(false);
+  const [showEmailVerification, setShowEmailVerification] = useState(true);
 
   useEffect(() => {
-    setShowEmailVerification(!!status?.email_verification);
+    setShowEmailVerification(true);
     if (status?.turnstile_check) {
       setTurnstileEnabled(true);
       setTurnstileSiteKey(status.turnstile_site_key);
@@ -216,6 +216,20 @@ const RegisterForm = () => {
   }
 
   async function handleSubmit(e) {
+    const email = inputs.email.trim();
+    const verificationCode = inputs.verification_code.trim();
+    if (!username || !password) {
+      showInfo(t('请输入用户名'));
+      return;
+    }
+    if (!email) {
+      showInfo(t('请输入邮箱！'));
+      return;
+    }
+    if (!verificationCode) {
+      showInfo(t('请输入邮箱验证码！'));
+      return;
+    }
     if (password.length < 8) {
       showInfo('密码长度不得小于 8 位！');
       return;
@@ -234,10 +248,15 @@ const RegisterForm = () => {
         if (!affCode) {
           affCode = localStorage.getItem('aff');
         }
-        inputs.aff_code = affCode;
+        const registerInputs = {
+          ...inputs,
+          email,
+          verification_code: verificationCode,
+          aff_code: affCode,
+        };
         const res = await API.post(
           `/api/user/register?turnstile=${turnstileToken}`,
-          inputs,
+          registerInputs,
         );
         const { success, message } = res.data;
         if (success) {
@@ -255,7 +274,8 @@ const RegisterForm = () => {
   }
 
   const sendVerificationCode = async () => {
-    if (inputs.email === '') return;
+    const email = inputs.email.trim();
+    if (email === '') return;
     if (turnstileEnabled && turnstileToken === '') {
       showInfo('请稍后几秒重试，Turnstile 正在检查用户环境！');
       return;
@@ -263,7 +283,7 @@ const RegisterForm = () => {
     setVerificationCodeLoading(true);
     try {
       const res = await API.get(
-        `/api/verification?email=${encodeURIComponent(inputs.email)}&turnstile=${turnstileToken}`,
+        `/api/verification?email=${encodeURIComponent(email)}&turnstile=${turnstileToken}`,
       );
       const { success, message } = res.data;
       if (success) {
@@ -781,8 +801,7 @@ const RegisterForm = () => {
         style={{ top: '50%', left: '-120px' }}
       />
       <div className='w-full max-w-sm mt-[60px]'>
-        {showEmailRegister ||
-        !hasOAuthRegisterOptions
+        {showEmailRegister || !hasOAuthRegisterOptions
           ? renderEmailRegisterForm()
           : renderOAuthOptions()}
         {renderWeChatLoginModal()}

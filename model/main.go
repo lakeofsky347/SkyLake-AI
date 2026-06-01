@@ -73,7 +73,7 @@ func createRootAccountIfNeed() error {
 	var user User
 	//if user.Status != common.UserStatusEnabled {
 	if err := DB.First(&user).Error; err != nil {
-		common.SysLog("no user exists, create an admin user for you: username is root, password is 123456")
+		common.SysLog("no user exists, create a root user for you: username is root, password is 123456")
 		hashedPassword, err := common.Password2Hash("123456")
 		if err != nil {
 			return err
@@ -81,13 +81,23 @@ func createRootAccountIfNeed() error {
 		rootUser := User{
 			Username:    "root",
 			Password:    hashedPassword,
-			Role:        common.RoleAdminUser,
+			Role:        common.RoleRootUser,
 			Status:      common.UserStatusEnabled,
-			DisplayName: "Admin User",
+			DisplayName: "Root User",
 			AccessToken: nil,
 			Quota:       100000000,
 		}
 		DB.Create(&rootUser)
+		return nil
+	}
+	if !RootUserExists() {
+		var admin User
+		if err := DB.Where("role >= ?", common.RoleAdminUser).Order("role desc, id asc").First(&admin).Error; err == nil {
+			if err := DB.Model(&admin).Update("role", common.RoleRootUser).Error; err != nil {
+				return err
+			}
+			common.SysLog(fmt.Sprintf("backfilled user %s as root user", admin.Username))
+		}
 	}
 	return nil
 }

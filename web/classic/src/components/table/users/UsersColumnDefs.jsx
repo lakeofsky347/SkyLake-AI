@@ -50,6 +50,11 @@ const renderRole = (role, t) => {
         </Tag>
       );
     case 100:
+      return (
+        <Tag color='red' shape='circle'>
+          {t('超级管理员')}
+        </Tag>
+      );
     case 10:
       return (
         <Tag color='yellow' shape='circle'>

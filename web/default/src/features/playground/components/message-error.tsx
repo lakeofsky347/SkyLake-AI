@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { AlertCircle, AlertTriangle, Settings } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -36,7 +37,7 @@ interface MessageErrorProps {
 export function MessageError({ message, className = '' }: MessageErrorProps) {
   const { t } = useTranslation()
   const user = useAuthStore((s) => s.auth.user)
-  const isAdmin = user?.role != null && user.role >= 10
+  const isRoot = user?.role != null && user.role >= ROLE.ROOT
 
   if (message.status !== MESSAGE_STATUS.ERROR) {
     return null
@@ -52,7 +53,7 @@ export function MessageError({ message, className = '' }: MessageErrorProps) {
         <AlertTitle>{t('Model Price Not Configured')}</AlertTitle>
         <AlertDescription className='space-y-2'>
           <p>{errorContent}</p>
-          {isAdmin && (
+          {isRoot && (
             <Button
               variant='outline'
               size='sm'

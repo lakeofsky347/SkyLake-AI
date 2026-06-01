@@ -3848,6 +3848,7 @@
     "Subscription plans do NOT use the bound Product — each plan has its own dedicated Pancake product, set in the Subscriptions admin (or auto-minted via the \"+ Create\" button there).": "Subscription plans do NOT use the bound Product — each plan has its own dedicated Pancake product, set in the Subscriptions admin (or auto-minted via the \"+ Create\" button there).",
     "Subscription-friendly": "Subscription-friendly",
     "Subtract": "Subtract",
+    "Super Admin": "Super Admin",
     "Success": "Success",
     "Success rate": "Success rate",
     "Successfully created {{count}} API Key(s)": "Successfully created {{count}} API Key(s)",

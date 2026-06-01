@@ -249,9 +249,11 @@ export function useUsersColumns(): ColumnDef<User>[] {
       cell: ({ row }) => {
         const roleValue = row.getValue('role') as number
         const roleKey =
-          roleValue >= USER_ROLE.ADMIN
-            ? USER_ROLE.ADMIN
-            : (roleValue as keyof typeof USER_ROLES)
+          roleValue >= USER_ROLE.ROOT
+            ? USER_ROLE.ROOT
+            : roleValue >= USER_ROLE.ADMIN
+              ? USER_ROLE.ADMIN
+              : (roleValue as keyof typeof USER_ROLES)
         const roleConfig = USER_ROLES[roleKey as keyof typeof USER_ROLES]
 
         if (!roleConfig) {
@@ -270,7 +272,11 @@ export function useUsersColumns(): ColumnDef<User>[] {
       filterFn: (row, id, value) => {
         const roleValue = row.getValue(id) as number
         const roleFilterValue =
-          roleValue >= USER_ROLE.ADMIN ? USER_ROLE.ADMIN : roleValue
+          roleValue >= USER_ROLE.ROOT
+            ? USER_ROLE.ROOT
+            : roleValue >= USER_ROLE.ADMIN
+              ? USER_ROLE.ADMIN
+              : roleValue
         return value.includes(String(roleFilterValue))
       },
       enableSorting: false,

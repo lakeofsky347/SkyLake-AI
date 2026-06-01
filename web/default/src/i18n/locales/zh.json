@@ -3848,6 +3848,7 @@
     "Subscription plans do NOT use the bound Product — each plan has its own dedicated Pancake product, set in the Subscriptions admin (or auto-minted via the \"+ Create\" button there).": "订阅套餐不使用这里绑定的商品 —— 每个套餐在「订阅」管理页有自己专属的 Pancake 商品，可以手动填写或点 \"+ 新建\" 一键创建。",
     "Subscription-friendly": "适合订阅",
     "Subtract": "减少",
+    "Super Admin": "超级管理员",
     "Success": "成功",
     "Success rate": "成功率",
     "Successfully created {{count}} API Key(s)": "成功创建了 {{count}} 个 API 密钥",

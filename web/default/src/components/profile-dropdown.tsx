@@ -44,7 +44,7 @@ export function ProfileDropdown() {
   const [open, setOpen] = useDialogState()
   const user = useAuthStore((state) => state.auth.user)
   const { displayName, roleLabel } = useUserDisplay(user)
-  const isAdmin = (user?.role ?? 0) >= ROLE.ADMIN
+  const isRoot = (user?.role ?? 0) >= ROLE.ROOT
   const avatarName = user?.username || displayName
   const avatarFallback = getUserAvatarFallback(avatarName)
   const avatarFallbackStyle = useMemo(
@@ -109,7 +109,7 @@ export function ProfileDropdown() {
             {t('Wallet')}
           </DropdownMenuItem>
 
-          {isAdmin && (
+          {isRoot && (
             <DropdownMenuItem
               onClick={() =>
                 navigate({

@@ -145,8 +145,15 @@ func Register(c *gin.Context) {
 		return
 	}
 	var user model.User
-	err := json.NewDecoder(c.Request.Body).Decode(&user)
+	err := common.DecodeJson(c.Request.Body, &user)
 	if err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	user.Username = strings.TrimSpace(user.Username)
+	user.Email = strings.TrimSpace(user.Email)
+	user.VerificationCode = strings.TrimSpace(user.VerificationCode)
+	if user.Username == "" || user.Password == "" {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
@@ -154,15 +161,17 @@ func Register(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
 		return
 	}
-	if common.EmailVerificationEnabled {
-		if user.Email == "" || user.VerificationCode == "" {
-			common.ApiErrorI18n(c, i18n.MsgUserEmailVerificationRequired)
-			return
-		}
-		if !common.VerifyCodeWithKey(user.Email, user.VerificationCode, common.EmailVerificationPurpose) {
-			common.ApiErrorI18n(c, i18n.MsgUserVerificationCodeError)
-			return
-		}
+	if user.Email == "" || user.VerificationCode == "" {
+		common.ApiErrorI18n(c, i18n.MsgUserEmailVerificationRequired)
+		return
+	}
+	if err := common.Validate.Var(user.Email, "required,email"); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
+		return
+	}
+	if !common.VerifyCodeWithKey(user.Email, user.VerificationCode, common.EmailVerificationPurpose) {
+		common.ApiErrorI18n(c, i18n.MsgUserVerificationCodeError)
+		return
 	}
 	exist, err := model.CheckUserExistOrDeleted(user.Username, user.Email)
 	if err != nil {
@@ -183,13 +192,12 @@ func Register(c *gin.Context) {
 		InviterId:   inviterId,
 		Role:        common.RoleCommonUser, // 明确设置角色为普通用户
 	}
-	if common.EmailVerificationEnabled {
-		cleanUser.Email = user.Email
-	}
+	cleanUser.Email = user.Email
 	if err := cleanUser.Insert(inviterId); err != nil {
 		common.ApiError(c, err)
 		return
 	}
+	common.DeleteKey(user.Email, common.EmailVerificationPurpose)
 
 	// 获取插入后的用户ID
 	var insertedUser model.User
@@ -265,7 +273,20 @@ func SearchUsers(c *gin.Context) {
 }
 
 func canManageTargetRole(myRole int, targetRole int) bool {
-	return common.IsAdminRole(myRole)
+	if common.IsRootRole(myRole) {
+		return true
+	}
+	return myRole == common.RoleAdminUser && targetRole < common.RoleAdminUser
+}
+
+func canAssignTargetRole(myRole int, targetRole int) bool {
+	if !common.IsAssignableRole(targetRole) {
+		return false
+	}
+	if common.IsRootRole(myRole) {
+		return true
+	}
+	return myRole == common.RoleAdminUser && targetRole == common.RoleCommonUser
 }
 
 func GetUser(c *gin.Context) {
@@ -482,7 +503,8 @@ func generateDefaultSidebarConfig(userRole int) string {
 		"personal": true,
 	}
 
-	// Admin area - admin is the highest role and can access all management modules.
+	// Admin area - administrators can access management modules; root-only
+	// settings are exposed only for super administrators.
 	if common.IsAdminRole(userRole) {
 		defaultConfig["admin"] = map[string]interface{}{
 			"enabled":      true,
@@ -491,7 +513,7 @@ func generateDefaultSidebarConfig(userRole int) string {
 			"redemption":   true,
 			"user":         true,
 			"subscription": true,
-			"setting":      true,
+			"setting":      common.IsRootRole(userRole),
 		}
 	}
 	// 普通用户不包含admin区域
@@ -557,11 +579,14 @@ func UpdateUser(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserNoPermissionHigherLevel)
 		return
 	}
-	if updatedUser.Role != originUser.Role && !common.IsAssignableRole(updatedUser.Role) {
-		common.ApiErrorI18n(c, i18n.MsgUserCannotCreateHigherLevel)
+	if updatedUser.Role == common.RoleGuestUser && originUser.Role != common.RoleGuestUser {
+		updatedUser.Role = originUser.Role
+	}
+	if common.IsRootRole(originUser.Role) && updatedUser.Role != originUser.Role {
+		common.ApiErrorI18n(c, i18n.MsgUserCannotDemoteRootUser)
 		return
 	}
-	if !canManageTargetRole(myRole, updatedUser.Role) {
+	if updatedUser.Role != originUser.Role && !canAssignTargetRole(myRole, updatedUser.Role) {
 		common.ApiErrorI18n(c, i18n.MsgUserCannotCreateHigherLevel)
 		return
 	}
@@ -766,6 +791,10 @@ func DeleteUser(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserNoPermissionHigherLevel)
 		return
 	}
+	if common.IsRootRole(originUser.Role) {
+		common.ApiErrorI18n(c, i18n.MsgUserCannotDeleteRootUser)
+		return
+	}
 	err = model.HardDeleteUserById(id)
 	if err != nil {
 		common.ApiError(c, err)
@@ -809,7 +838,7 @@ func CreateUser(c *gin.Context) {
 		user.DisplayName = user.Username
 	}
 	myRole := c.GetInt("role")
-	if !common.IsAdminRole(myRole) || !common.IsAssignableRole(user.Role) {
+	if !canAssignTargetRole(myRole, user.Role) {
 		common.ApiErrorI18n(c, i18n.MsgUserCannotCreateHigherLevel)
 		return
 	}
@@ -864,10 +893,18 @@ func ManageUser(c *gin.Context) {
 	}
 	switch req.Action {
 	case "disable":
+		if common.IsRootRole(user.Role) {
+			common.ApiErrorI18n(c, i18n.MsgUserCannotDisableRootUser)
+			return
+		}
 		user.Status = common.UserStatusDisabled
 	case "enable":
 		user.Status = common.UserStatusEnabled
 	case "delete":
+		if common.IsRootRole(user.Role) {
+			common.ApiErrorI18n(c, i18n.MsgUserCannotDeleteRootUser)
+			return
+		}
 		if err := user.Delete(); err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
@@ -881,12 +918,20 @@ func ManageUser(c *gin.Context) {
 			common.SysLog(fmt.Sprintf("failed to invalidate tokens cache for user %d: %s", user.Id, err.Error()))
 		}
 	case "promote":
+		if !common.IsRootRole(myRole) {
+			common.ApiErrorI18n(c, i18n.MsgUserAdminCannotPromote)
+			return
+		}
 		if user.Role >= common.RoleAdminUser {
 			common.ApiErrorI18n(c, i18n.MsgUserAlreadyAdmin)
 			return
 		}
 		user.Role = common.RoleAdminUser
 	case "demote":
+		if common.IsRootRole(user.Role) {
+			common.ApiErrorI18n(c, i18n.MsgUserCannotDemoteRootUser)
+			return
+		}
 		if user.Role == common.RoleCommonUser {
 			common.ApiErrorI18n(c, i18n.MsgUserAlreadyCommon)
 			return

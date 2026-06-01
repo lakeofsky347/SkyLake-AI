@@ -101,7 +101,7 @@ func PostSetup(c *gin.Context) {
 			return
 		}
 
-		// Create initial admin user
+		// Create initial super administrator user
 		hashedPassword, err := common.Password2Hash(req.Password)
 		if err != nil {
 			c.JSON(200, gin.H{
@@ -113,9 +113,9 @@ func PostSetup(c *gin.Context) {
 		rootUser := model.User{
 			Username:    req.Username,
 			Password:    hashedPassword,
-			Role:        common.RoleAdminUser,
+			Role:        common.RoleRootUser,
 			Status:      common.UserStatusEnabled,
-			DisplayName: "Admin User",
+			DisplayName: "Root User",
 			AccessToken: nil,
 			Quota:       100000000,
 		}
