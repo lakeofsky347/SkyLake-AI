@@ -49,7 +49,7 @@ import { Turnstile } from '@/components/turnstile'
 import { register, wechatLoginByCode } from '@/features/auth/api'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
 import { OAuthProviders } from '@/features/auth/components/oauth-providers'
-import { registerFormSchema } from '@/features/auth/constants'
+import { createRegisterFormSchema } from '@/features/auth/constants'
 import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import { useEmailVerification } from '@/features/auth/hooks/use-email-verification'
 import { useTurnstile } from '@/features/auth/hooks/use-turnstile'
@@ -87,7 +87,15 @@ export function SignUpForm({
     validateTurnstile,
   })
 
-  const form = useForm<z.infer<typeof registerFormSchema>>({
+  const emailVerificationEnabled = Boolean(
+    status?.email_verification ?? status?.data?.email_verification
+  )
+  const registerFormSchema = useMemo(
+    () => createRegisterFormSchema(emailVerificationEnabled),
+    [emailVerificationEnabled]
+  )
+
+  const form = useForm<z.infer<ReturnType<typeof createRegisterFormSchema>>>({
     resolver: zodResolver(registerFormSchema),
     defaultValues: {
       username: '',
@@ -97,7 +105,7 @@ export function SignUpForm({
     },
   })
 
-  const emailValue = form.watch('email')
+  const emailValue = form.watch('email') ?? ''
   const hasUserAgreement = Boolean(status?.user_agreement_enabled)
   const hasPrivacyPolicy = Boolean(status?.privacy_policy_enabled)
   const requiresLegalConsent = hasUserAgreement || hasPrivacyPolicy
@@ -129,21 +137,25 @@ export function SignUpForm({
     }
   }, [requiresLegalConsent])
 
-  async function onSubmit(data: z.infer<typeof registerFormSchema>) {
+  async function onSubmit(
+    data: z.infer<ReturnType<typeof createRegisterFormSchema>>
+  ) {
     if (requiresLegalConsent && !agreedToLegal) {
       toast.error(legalConsentErrorMessage)
       return
     }
 
-    const email = data.email.trim()
+    const email = (data.email ?? '').trim()
     const code = verificationCode.trim()
-    if (!email) {
-      toast.error(t('Please enter your email'))
-      return
-    }
-    if (!code) {
-      toast.error(t('Please enter the verification code'))
-      return
+    if (emailVerificationEnabled) {
+      if (!email) {
+        toast.error(t('Please enter your email'))
+        return
+      }
+      if (!code) {
+        toast.error(t('Please enter the verification code'))
+        return
+      }
     }
 
     if (!validateTurnstile()) return
@@ -171,6 +183,7 @@ export function SignUpForm({
   }
 
   async function handleSendVerificationCode() {
+    if (!emailVerificationEnabled) return
     await sendCode(emailValue.trim())
   }
 
@@ -269,53 +282,59 @@ export function SignUpForm({
           )}
         />
 
-        {/* Email Verification Section */}
-        <FormField
-          control={form.control}
-          name='email'
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t('Email (required for verification)')}</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder={t('name@example.com')}
-                  type='email'
-                  autoComplete='email'
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Verification Code Field */}
-        <div className='flex items-end gap-2'>
-          <div className='flex-1'>
-            <Input
-              placeholder={t('Verification code')}
-              value={verificationCode}
-              onChange={(e) => setVerificationCode(e.target.value)}
-              autoComplete='one-time-code'
+        {emailVerificationEnabled && (
+          <>
+            {/* Email Verification Section */}
+            <FormField
+              control={form.control}
+              name='email'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {t('Email (required for verification)')}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder={t('name@example.com')}
+                      type='email'
+                      autoComplete='email'
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
-          <Button
-            variant='outline'
-            type='button'
-            disabled={
-              isLoading || isSendingCode || isActive || !emailValue.trim()
-            }
-            onClick={handleSendVerificationCode}
-          >
-            {isActive ? (
-              t('Resend ({{seconds}}s)', { seconds: secondsLeft })
-            ) : isSendingCode ? (
-              <Loader2 className='h-4 w-4 animate-spin' />
-            ) : (
-              t('Send code')
-            )}
-          </Button>
-        </div>
+
+            {/* Verification Code Field */}
+            <div className='flex items-end gap-2'>
+              <div className='flex-1'>
+                <Input
+                  placeholder={t('Verification code')}
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value)}
+                  autoComplete='one-time-code'
+                />
+              </div>
+              <Button
+                variant='outline'
+                type='button'
+                disabled={
+                  isLoading || isSendingCode || isActive || !emailValue.trim()
+                }
+                onClick={handleSendVerificationCode}
+              >
+                {isActive ? (
+                  t('Resend ({{seconds}}s)', { seconds: secondsLeft })
+                ) : isSendingCode ? (
+                  <Loader2 className='h-4 w-4 animate-spin' />
+                ) : (
+                  t('Send code')
+                )}
+              </Button>
+            </div>
+          </>
+        )}
 
         {/* Turnstile */}
         {isTurnstileEnabled && (

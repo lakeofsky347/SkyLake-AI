@@ -30,24 +30,36 @@ export const loginFormSchema = z.object({
     .min(8, 'Password must be at least 8 characters long'),
 })
 
-export const registerFormSchema = z
-  .object({
-    username: z.string().min(1, 'Please enter your username'),
-    email: z
-      .string()
-      .min(1, 'Please enter your email')
-      .email('Please enter a valid email address'),
-    password: z
-      .string()
-      .min(1, 'Please enter your password')
-      .min(8, 'Password must be at least 8 characters long')
-      .max(20, 'Password must be at most 20 characters long'),
-    confirmPassword: z.string().min(1, 'Please confirm your password'),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords don't match.",
-    path: ['confirmPassword'],
-  })
+export function createRegisterFormSchema(requireEmailVerification: boolean) {
+  return z
+    .object({
+      username: z.string().min(1, 'Please enter your username'),
+      email: requireEmailVerification
+        ? z
+            .string()
+            .min(1, 'Please enter your email')
+            .email('Please enter a valid email address')
+        : z
+            .string()
+            .optional()
+            .refine(
+              (value) => !value || z.string().email().safeParse(value).success,
+              'Please enter a valid email address'
+            ),
+      password: z
+        .string()
+        .min(1, 'Please enter your password')
+        .min(8, 'Password must be at least 8 characters long')
+        .max(20, 'Password must be at most 20 characters long'),
+      confirmPassword: z.string().min(1, 'Please confirm your password'),
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+      message: "Passwords don't match.",
+      path: ['confirmPassword'],
+    })
+}
+
+export const registerFormSchema = createRegisterFormSchema(true)
 
 export const forgotPasswordFormSchema = z.object({
   email: z.string().email({
