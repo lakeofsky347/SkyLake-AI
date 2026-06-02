@@ -125,29 +125,42 @@ function LegalLinks(props: { leadingSeparator?: boolean; enabled?: boolean }) {
   )
 }
 
+function SkyLakeFooterMark() {
+  return (
+    <span
+      aria-hidden='true'
+      className='relative grid size-7 place-items-center overflow-hidden rounded-lg border border-[#b9dcff] bg-[#f5faff]'
+    >
+      <span className='absolute inset-x-1 bottom-1 h-2 rounded-full bg-[#0a84ff]/15' />
+      <span className='absolute top-1.5 left-1.5 h-3 w-4.5 rounded-full border-2 border-[#0071e3] border-b-transparent' />
+      <span className='absolute right-1.5 bottom-2 h-2 w-3.5 rounded-full bg-[#56ccff]/45' />
+    </span>
+  )
+}
+
 // inline=true returns just the inner span for composition in a parent flex
 // row. inline=false wraps in a centered/right-aligned div (default).
-function ProjectAttribution(props: { currentYear: number; inline?: boolean }) {
+function ProjectAttribution(props: { inline?: boolean }) {
   const { t } = useTranslation()
   const content = (
-    <span className='text-muted-foreground/45'>
-      &copy; {props.currentYear}{' '}
+    <span className='text-muted-foreground/55'>
+      {t('Open-source attribution')}:{' '}
       <a
         href='https://github.com/QuantumNous/new-api'
         target='_blank'
         rel='noopener noreferrer'
-        className='text-foreground/70 hover:text-foreground font-medium transition-colors'
+        className='text-foreground/75 hover:text-foreground font-medium transition-colors'
       >
         {t('New API')}
       </a>
-      . {t(NEW_API_FOOTER_ATTRIBUTION_KEY)}
+      <span className='sr-only'>. {t(NEW_API_FOOTER_ATTRIBUTION_KEY)}</span>
     </span>
   )
   if (props.inline) {
     return content
   }
   return (
-    <div className='text-muted-foreground/45 text-center text-xs sm:text-right'>
+    <div className='text-muted-foreground/55 text-center text-xs sm:text-right'>
       {content}
     </div>
   )
@@ -163,8 +176,9 @@ export function Footer(props: FooterProps) {
   } = useSystemConfig()
   const showLegalLinks = props.showLegalLinks ?? true
 
-  const displayLogo = systemLogo || props.logo || '/logo.png'
-  const displayName = systemName || props.name || 'New API'
+  const displayLogo = props.logo || systemLogo || '/logo.png'
+  const displayName = props.name || systemName || 'New API'
+  const isSkyLakeBrand = displayName === 'SkyLake AI'
   const isDemoSiteMode = Boolean(demoSiteEnabled)
   const currentYear = new Date().getFullYear()
 
@@ -243,7 +257,7 @@ export function Footer(props: FooterProps) {
             />
             <div className='border-border/60 text-muted-foreground/45 flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t pt-4 text-xs sm:w-auto sm:justify-end sm:border-t-0 sm:border-l sm:pt-0 sm:pl-5'>
               <LegalLinks enabled={showLegalLinks} />
-              <ProjectAttribution currentYear={currentYear} inline />
+              <ProjectAttribution inline />
             </div>
           </div>
         </div>
@@ -260,11 +274,15 @@ export function Footer(props: FooterProps) {
           {/* Brand column */}
           <div className='shrink-0'>
             <Link to='/' className='group flex items-center gap-2.5'>
-              <img
-                src={displayLogo}
-                alt={displayName}
-                className='size-7 rounded-lg object-contain'
-              />
+              {isSkyLakeBrand ? (
+                <SkyLakeFooterMark />
+              ) : (
+                <img
+                  src={displayLogo}
+                  alt={displayName}
+                  className='size-7 rounded-lg object-contain'
+                />
+              )}
               <span className='text-sm font-semibold tracking-tight'>
                 {displayName}
               </span>
@@ -305,7 +323,7 @@ export function Footer(props: FooterProps) {
             </span>
             <LegalLinks enabled={showLegalLinks} leadingSeparator />
           </div>
-          <ProjectAttribution currentYear={currentYear} />
+          <ProjectAttribution />
         </div>
       </div>
     </footer>
