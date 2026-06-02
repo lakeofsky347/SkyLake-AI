@@ -17,27 +17,36 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useState } from 'react'
-import i18next from 'i18next'
-import { toast } from 'sonner'
 import { getHomePageContent } from '../api'
 import type { HomePageContentResult } from '../types'
 
 const STORAGE_KEY = 'home_page_content'
+
+function getCachedHomePageContent(): string {
+  try {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem(STORAGE_KEY) ?? ''
+    }
+  } catch {
+    /* empty */
+  }
+  return ''
+}
 
 /**
  * Hook to load and manage custom home page content
  * Supports both Markdown/HTML content and iframe URLs
  */
 export function useHomePageContent(): HomePageContentResult {
-  const [content, setContent] = useState<string>('')
-  const [isLoaded, setIsLoaded] = useState(false)
+  const [content, setContent] = useState<string>(getCachedHomePageContent)
+  const [isLoaded, setIsLoaded] = useState(true)
 
   useEffect(() => {
     let mounted = true
 
     const loadContent = async () => {
       // Load from localStorage first for immediate display
-      const cached = localStorage.getItem(STORAGE_KEY)
+      const cached = getCachedHomePageContent()
       if (cached && mounted) {
         setContent(cached)
       }
@@ -58,9 +67,7 @@ export function useHomePageContent(): HomePageContentResult {
         }
       } catch (error) {
         if (!mounted) return
-        // eslint-disable-next-line no-console
-        console.error('Failed to load home page content:', error)
-        toast.error(i18next.t('Failed to load home page content'))
+        void error
       } finally {
         if (mounted) {
           setIsLoaded(true)

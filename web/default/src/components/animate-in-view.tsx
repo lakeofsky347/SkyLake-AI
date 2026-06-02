@@ -51,12 +51,28 @@ export function AnimateInView(props: AnimateInViewProps) {
       return
     }
 
-    const observer = new IntersectionObserver(
+    let observer: IntersectionObserver | null = null
+
+    const reveal = () => {
+      el.classList.remove('opacity-0')
+      el.classList.add(`landing-animate-${animation}`)
+      if (once) {
+        observer?.unobserve(el)
+        window.removeEventListener('scroll', revealIfPassed)
+      }
+    }
+
+    const revealIfPassed = () => {
+      const rect = el.getBoundingClientRect()
+      if (rect.top <= window.innerHeight * (1 - threshold)) {
+        reveal()
+      }
+    }
+
+    observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          el.classList.remove('opacity-0')
-          el.classList.add(`landing-animate-${animation}`)
-          if (once) observer.unobserve(el)
+          reveal()
         } else if (!once) {
           el.classList.add('opacity-0')
           el.classList.remove(`landing-animate-${animation}`)
@@ -66,7 +82,15 @@ export function AnimateInView(props: AnimateInViewProps) {
     )
 
     observer.observe(el)
-    return () => observer.disconnect()
+    if (once) {
+      window.addEventListener('scroll', revealIfPassed, { passive: true })
+      revealIfPassed()
+    }
+
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('scroll', revealIfPassed)
+    }
   }, [threshold, once, animation])
 
   return (

@@ -169,12 +169,10 @@ For commercial licensing, please contact support@quantumnous.com
     transform: translateX(1px);
   }
 
-  .tech-sidebar [data-sidebar='menu-button'][data-active]:not(
-      [data-active='false']
-    ),
-  .tech-sidebar [data-sidebar='menu-sub-button'][data-active]:not(
-      [data-active='false']
-    ) {
+  .tech-sidebar
+    [data-sidebar='menu-button'][data-active]:not([data-active='false']),
+  .tech-sidebar
+    [data-sidebar='menu-sub-button'][data-active]:not([data-active='false']) {
     background: linear-gradient(
       90deg,
       color-mix(in oklch, var(--sidebar-primary) 15%, transparent),
@@ -194,12 +192,11 @@ For commercial licensing, please contact support@quantumnous.com
   .tech-panel {
     position: relative;
     border: 1px solid color-mix(in oklch, var(--border) 76%, transparent);
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklch, var(--card) 92%, var(--primary) 8%) 0%,
-        var(--card) 72%
-      );
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--card) 92%, var(--primary) 8%) 0%,
+      var(--card) 72%
+    );
     box-shadow:
       inset 0 1px 0 color-mix(in oklch, var(--foreground) 5%, transparent),
       0 1px 2px color-mix(in oklch, var(--foreground) 8%, transparent);
@@ -764,10 +761,88 @@ For commercial licensing, please contact support@quantumnous.com
   animation: terminal-demo-pulse 1.5s ease-in-out infinite;
 }
 
+@keyframes skylake-chart-draw {
+  from {
+    stroke-dashoffset: 620;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes skylake-status-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(16 185 129 / 0.28);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgb(16 185 129 / 0);
+  }
+}
+
+@keyframes skylake-route-sweep {
+  0% {
+    transform: translateX(-110%);
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(110%);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .portal-product-shell {
+    transition:
+      transform 420ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .portal-product-shell:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 34px 100px rgb(15 23 42 / 0.18);
+  }
+
+  .skylake-chart-line {
+    stroke-dasharray: 620;
+    stroke-dashoffset: 620;
+    animation: skylake-chart-draw 1400ms cubic-bezier(0.16, 1, 0.3, 1) 180ms
+      both;
+  }
+
+  .skylake-status-dot {
+    animation: skylake-status-pulse 2400ms ease-in-out infinite;
+  }
+
+  .skylake-route-line {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .skylake-route-line::after {
+    position: absolute;
+    inset: 0;
+    content: '';
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(10 132 255 / 0.75),
+      transparent
+    );
+    animation: skylake-route-sweep 2800ms ease-in-out infinite;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .terminal-demo-blink,
   .terminal-demo-spin,
-  .terminal-demo-pulse {
+  .terminal-demo-pulse,
+  .skylake-chart-line,
+  .skylake-status-dot,
+  .skylake-route-line::after {
     animation: none !important;
   }
 }

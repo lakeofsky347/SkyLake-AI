@@ -50,6 +50,29 @@ type AuthPromptTarget = {
   href: string
 }
 
+function PublicHeaderNotificationControls() {
+  const notifications = useNotifications()
+
+  return (
+    <>
+      <NotificationButton
+        unreadCount={notifications.unreadCount}
+        onClick={() => notifications.openDialog()}
+      />
+      <NotificationDialog
+        open={notifications.dialogOpen}
+        onOpenChange={notifications.setDialogOpen}
+        activeTab={notifications.activeTab}
+        onTabChange={notifications.setActiveTab}
+        notice={notifications.notice}
+        announcements={notifications.announcements}
+        loading={notifications.loading}
+        onCloseToday={notifications.closeToday}
+      />
+    </>
+  )
+}
+
 export interface PublicHeaderProps {
   navLinks?: TopNavLink[]
   mobileLinks?: TopNavLink[]
@@ -88,14 +111,16 @@ export function PublicHeader(props: PublicHeaderProps) {
   const [authPromptSecondsLeft, setAuthPromptSecondsLeft] =
     useState(AUTH_PROMPT_SECONDS)
   const { auth } = useAuthStore()
+  const needsSystemBrand = !customLogo || !customSiteName
+  const systemConfig = useSystemConfig()
   const {
     systemName,
     logo: systemLogo,
-    loading,
+    loading: systemConfigLoading,
     logoLoaded,
-  } = useSystemConfig()
-  const dynamicLinks = useTopNavLinks()
-  const notifications = useNotifications()
+  } = systemConfig
+  const loading = needsSystemBrand ? systemConfigLoading : false
+  const dynamicLinks = useTopNavLinks({ enabled: props.navLinks == null })
   const routerState = useRouterState()
   const pathname = routerState.location.pathname
 
@@ -270,12 +295,7 @@ export function PublicHeader(props: PublicHeaderProps) {
 
               {showLanguageSwitcher && <LanguageSwitcher />}
               {showThemeSwitch && <ThemeSwitch />}
-              {showNotifications && (
-                <NotificationButton
-                  unreadCount={notifications.unreadCount}
-                  onClick={() => notifications.openDialog()}
-                />
-              )}
+              {showNotifications && <PublicHeaderNotificationControls />}
 
               {showAuthButtons && (
                 <>
@@ -445,20 +465,6 @@ export function PublicHeader(props: PublicHeaderProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Notification Dialog */}
-      {showNotifications && (
-        <NotificationDialog
-          open={notifications.dialogOpen}
-          onOpenChange={notifications.setDialogOpen}
-          activeTab={notifications.activeTab}
-          onTabChange={notifications.setActiveTab}
-          notice={notifications.notice}
-          announcements={notifications.announcements}
-          loading={notifications.loading}
-          onCloseToday={notifications.closeToday}
-        />
-      )}
     </>
   )
 }

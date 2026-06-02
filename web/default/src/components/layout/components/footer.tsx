@@ -20,8 +20,8 @@ import { Fragment, useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
-import { useSystemConfig } from '@/hooks/use-system-config'
 import { useStatus } from '@/hooks/use-status'
+import { useSystemConfig } from '@/hooks/use-system-config'
 
 interface FooterLink {
   text: string
@@ -38,6 +38,7 @@ interface FooterProps {
   name?: string
   columns?: FooterColumnProps[]
   copyright?: string
+  showLegalLinks?: boolean
   className?: string
 }
 
@@ -78,10 +79,14 @@ function FooterLinkItem(props: { link: FooterLink }) {
 // Renders User Agreement / Privacy Policy links inline with the parent's
 // copyright row when either is configured in System Settings → Site. Emits
 // fragmented siblings so the parent flex container's gap controls spacing.
-function LegalLinks(props: { leadingSeparator?: boolean }) {
+function LegalLinks(props: { leadingSeparator?: boolean; enabled?: boolean }) {
   const { t } = useTranslation()
-  const { status } = useStatus()
+  const enabled = props.enabled ?? true
+  const { status } = useStatus({ enabled })
   const items: { key: string; label: string; href: string }[] = []
+  if (!enabled) {
+    return null
+  }
   if (status?.user_agreement_enabled) {
     items.push({
       key: 'user-agreement',
@@ -156,6 +161,7 @@ export function Footer(props: FooterProps) {
     footerHtml,
     demoSiteEnabled,
   } = useSystemConfig()
+  const showLegalLinks = props.showLegalLinks ?? true
 
   const displayLogo = systemLogo || props.logo || '/logo.png'
   const displayName = systemName || props.name || 'New API'
@@ -235,8 +241,8 @@ export function Footer(props: FooterProps) {
               className='custom-footer text-muted-foreground min-w-0 text-center text-sm sm:text-left'
               dangerouslySetInnerHTML={{ __html: footerHtml }}
             />
-            <div className='border-border/60 flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t pt-4 text-muted-foreground/45 text-xs sm:w-auto sm:justify-end sm:border-t-0 sm:border-l sm:pt-0 sm:pl-5'>
-              <LegalLinks />
+            <div className='border-border/60 text-muted-foreground/45 flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t pt-4 text-xs sm:w-auto sm:justify-end sm:border-t-0 sm:border-l sm:pt-0 sm:pl-5'>
+              <LegalLinks enabled={showLegalLinks} />
               <ProjectAttribution currentYear={currentYear} inline />
             </div>
           </div>
@@ -297,7 +303,7 @@ export function Footer(props: FooterProps) {
               &copy; {currentYear} {displayName}.{' '}
               {props.copyright ?? t('footer.defaultCopyright')}
             </span>
-            <LegalLinks leadingSeparator />
+            <LegalLinks enabled={showLegalLinks} leadingSeparator />
           </div>
           <ProjectAttribution currentYear={currentYear} />
         </div>

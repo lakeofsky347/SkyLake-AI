@@ -19,8 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
-import { useStatus } from '@/hooks/use-status'
 import { parseHeaderNavModulesFromStatus } from '@/lib/nav-modules'
+import { useStatus } from '@/hooks/use-status'
 
 export type TopNavLink = {
   title: string
@@ -42,9 +42,10 @@ export type TopNavLink = {
  *   about: true
  * }
  */
-export function useTopNavLinks(): TopNavLink[] {
+export function useTopNavLinks(options?: { enabled?: boolean }): TopNavLink[] {
   const { t } = useTranslation()
-  const { status } = useStatus()
+  const enabled = options?.enabled ?? true
+  const { status } = useStatus({ enabled })
   const { auth } = useAuthStore()
 
   // Parse HeaderNavModules
@@ -53,6 +54,8 @@ export function useTopNavLinks(): TopNavLink[] {
       status as Record<string, unknown> | null
     )
   }, [status])
+
+  if (!enabled) return []
 
   // Documentation link (may be external)
   const docsLink: string | undefined = status?.docs_link as string | undefined
