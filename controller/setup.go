@@ -52,7 +52,6 @@ func GetSetup(c *gin.Context) {
 }
 
 func PostSetup(c *gin.Context) {
-	// Check if setup is already completed
 	if constant.Setup {
 		c.JSON(200, gin.H{
 			"success": false,
@@ -61,7 +60,6 @@ func PostSetup(c *gin.Context) {
 		return
 	}
 
-	// Check if an administrator already exists
 	rootExists := model.RootUserExists()
 
 	var req SetupRequest
@@ -74,17 +72,15 @@ func PostSetup(c *gin.Context) {
 		return
 	}
 
-	// If root doesn't exist, validate and create admin account
 	if !rootExists {
-		// Validate username length: max 12 characters to align with model.User validation
 		if len(req.Username) > 12 {
 			c.JSON(200, gin.H{
 				"success": false,
-				"message": "用户名长度不能超过12个字符",
+				"message": "用户名长度不能超过 12 个字符",
 			})
 			return
 		}
-		// Validate password
+
 		if req.Password != req.ConfirmPassword {
 			c.JSON(200, gin.H{
 				"success": false,
@@ -96,12 +92,11 @@ func PostSetup(c *gin.Context) {
 		if len(req.Password) < 8 {
 			c.JSON(200, gin.H{
 				"success": false,
-				"message": "密码长度至少为8个字符",
+				"message": "密码长度至少需要 8 个字符",
 			})
 			return
 		}
 
-		// Create initial super administrator user
 		hashedPassword, err := common.Password2Hash(req.Password)
 		if err != nil {
 			c.JSON(200, gin.H{
@@ -110,6 +105,7 @@ func PostSetup(c *gin.Context) {
 			})
 			return
 		}
+
 		rootUser := model.User{
 			Username:    req.Username,
 			Password:    hashedPassword,
@@ -123,36 +119,29 @@ func PostSetup(c *gin.Context) {
 		if err != nil {
 			c.JSON(200, gin.H{
 				"success": false,
-				"message": "创建管理员账号失败: " + err.Error(),
+				"message": "创建管理员账户失败: " + err.Error(),
 			})
 			return
 		}
 	}
 
-	// Set operation modes
 	operation_setting.SelfUseModeEnabled = req.SelfUseModeEnabled
 	operation_setting.DemoSiteEnabled = req.DemoSiteEnabled
 
-	// Save operation modes to database for persistence
-	err = model.UpdateOption("SelfUseModeEnabled", boolToString(req.SelfUseModeEnabled))
+	// Fresh instances should land on the new portal/chat/admin split after setup.
+	err = model.UpdateOptionsBulk(map[string]string{
+		"SelfUseModeEnabled": boolToString(req.SelfUseModeEnabled),
+		"DemoSiteEnabled":    boolToString(req.DemoSiteEnabled),
+		"theme.frontend":     "default",
+	})
 	if err != nil {
 		c.JSON(200, gin.H{
 			"success": false,
-			"message": "保存自用模式设置失败: " + err.Error(),
+			"message": "保存初始化设置失败: " + err.Error(),
 		})
 		return
 	}
 
-	err = model.UpdateOption("DemoSiteEnabled", boolToString(req.DemoSiteEnabled))
-	if err != nil {
-		c.JSON(200, gin.H{
-			"success": false,
-			"message": "保存演示站点模式设置失败: " + err.Error(),
-		})
-		return
-	}
-
-	// Update setup status
 	constant.Setup = true
 
 	setup := model.Setup{
