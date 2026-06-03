@@ -20,8 +20,8 @@ import { Fragment, useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
-import { useSystemConfig } from '@/hooks/use-system-config'
 import { useStatus } from '@/hooks/use-status'
+import { useSystemConfig } from '@/hooks/use-system-config'
 
 interface FooterLink {
   text: string
@@ -38,6 +38,8 @@ interface FooterProps {
   name?: string
   columns?: FooterColumnProps[]
   copyright?: string
+  showLegalLinks?: boolean
+  compact?: boolean
   className?: string
 }
 
@@ -78,10 +80,14 @@ function FooterLinkItem(props: { link: FooterLink }) {
 // Renders User Agreement / Privacy Policy links inline with the parent's
 // copyright row when either is configured in System Settings → Site. Emits
 // fragmented siblings so the parent flex container's gap controls spacing.
-function LegalLinks(props: { leadingSeparator?: boolean }) {
+function LegalLinks(props: { leadingSeparator?: boolean; enabled?: boolean }) {
   const { t } = useTranslation()
-  const { status } = useStatus()
+  const enabled = props.enabled ?? true
+  const { status } = useStatus({ enabled })
   const items: { key: string; label: string; href: string }[] = []
+  if (!enabled) {
+    return null
+  }
   if (status?.user_agreement_enabled) {
     items.push({
       key: 'user-agreement',
@@ -122,27 +128,27 @@ function LegalLinks(props: { leadingSeparator?: boolean }) {
 
 // inline=true returns just the inner span for composition in a parent flex
 // row. inline=false wraps in a centered/right-aligned div (default).
-function ProjectAttribution(props: { currentYear: number; inline?: boolean }) {
+function ProjectAttribution(props: { inline?: boolean }) {
   const { t } = useTranslation()
   const content = (
-    <span className='text-muted-foreground/45'>
-      &copy; {props.currentYear}{' '}
+    <span className='text-muted-foreground/55'>
+      {t('Open-source attribution')}:{' '}
       <a
         href='https://github.com/QuantumNous/new-api'
         target='_blank'
         rel='noopener noreferrer'
-        className='text-foreground/70 hover:text-foreground font-medium transition-colors'
+        className='text-foreground/75 hover:text-foreground font-medium transition-colors'
       >
         {t('New API')}
       </a>
-      . {t(NEW_API_FOOTER_ATTRIBUTION_KEY)}
+      <span className='sr-only'>. {t(NEW_API_FOOTER_ATTRIBUTION_KEY)}</span>
     </span>
   )
   if (props.inline) {
     return content
   }
   return (
-    <div className='text-muted-foreground/45 text-center text-xs sm:text-right'>
+    <div className='text-muted-foreground/55 text-center text-xs sm:text-right'>
       {content}
     </div>
   )
@@ -156,9 +162,11 @@ export function Footer(props: FooterProps) {
     footerHtml,
     demoSiteEnabled,
   } = useSystemConfig()
+  const showLegalLinks = props.showLegalLinks ?? true
+  const compact = props.compact ?? false
 
-  const displayLogo = systemLogo || props.logo || '/logo.png'
-  const displayName = systemName || props.name || 'New API'
+  const displayLogo = props.logo || systemLogo || '/logo.png'
+  const displayName = props.name || systemName || 'New API'
   const isDemoSiteMode = Boolean(demoSiteEnabled)
   const currentYear = new Date().getFullYear()
 
@@ -235,9 +243,9 @@ export function Footer(props: FooterProps) {
               className='custom-footer text-muted-foreground min-w-0 text-center text-sm sm:text-left'
               dangerouslySetInnerHTML={{ __html: footerHtml }}
             />
-            <div className='border-border/60 flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t pt-4 text-muted-foreground/45 text-xs sm:w-auto sm:justify-end sm:border-t-0 sm:border-l sm:pt-0 sm:pl-5'>
-              <LegalLinks />
-              <ProjectAttribution currentYear={currentYear} inline />
+            <div className='border-border/60 text-muted-foreground/45 flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t pt-4 text-xs sm:w-auto sm:justify-end sm:border-t-0 sm:border-l sm:pt-0 sm:pl-5'>
+              <LegalLinks enabled={showLegalLinks} />
+              <ProjectAttribution inline />
             </div>
           </div>
         </div>
@@ -249,57 +257,74 @@ export function Footer(props: FooterProps) {
     <footer
       className={cn('border-border/40 relative z-10 border-t', props.className)}
     >
-      <div className='mx-auto max-w-6xl px-6 py-12 md:py-16'>
-        <div className='flex flex-col justify-between gap-10 md:flex-row md:gap-16'>
-          {/* Brand column */}
-          <div className='shrink-0'>
-            <Link to='/' className='group flex items-center gap-2.5'>
+      <div
+        className={cn(
+          'mx-auto max-w-6xl px-6',
+          compact ? 'py-6 md:py-7' : 'py-12 md:py-16'
+        )}
+      >
+        {!compact && (
+          <div className='flex flex-col justify-between gap-10 md:flex-row md:gap-16'>
+            {/* Brand column */}
+            <div className='shrink-0'>
+              <Link to='/' className='group flex items-center gap-2.5'>
+                <img
+                  src={displayLogo}
+                  alt={displayName}
+                  className='size-7 rounded-lg object-contain'
+                />
+                <span className='text-sm font-semibold tracking-tight'>
+                  {displayName}
+                </span>
+              </Link>
+              <p className='text-muted-foreground/60 mt-3 max-w-[200px] text-xs leading-relaxed'>
+                {t('Powerful API Management Platform')}
+              </p>
+            </div>
+
+            {/* Links columns */}
+            {isDemoSiteMode && (
+              <div className='grid grid-cols-3 gap-8 md:gap-16'>
+                {displayColumns.map((column, index) => (
+                  <div key={index}>
+                    <p className='text-muted-foreground/50 mb-3 text-xs font-medium tracking-wider uppercase'>
+                      {t(column.title)}
+                    </p>
+                    <ul className='space-y-2.5'>
+                      {column.links.map((link, linkIndex) => (
+                        <li key={linkIndex}>
+                          <FooterLinkItem link={link} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div
+          className={cn(
+            'border-border/30 flex flex-col items-center justify-between gap-x-3 gap-y-3 border-t sm:flex-row',
+            compact ? 'pt-0 sm:pt-0 border-t-0' : 'mt-12 pt-6'
+          )}
+        >
+          <div className='text-muted-foreground/40 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-xs sm:justify-start'>
+            <Link to='/' className='flex items-center gap-2 text-foreground/80'>
               <img
                 src={displayLogo}
                 alt={displayName}
-                className='size-7 rounded-lg object-contain'
+                className='size-5 rounded-md object-contain'
               />
-              <span className='text-sm font-semibold tracking-tight'>
-                {displayName}
-              </span>
+              <span className='font-medium'>{displayName}</span>
             </Link>
-            <p className='text-muted-foreground/60 mt-3 max-w-[200px] text-xs leading-relaxed'>
-              {t('Powerful API Management Platform')}
-            </p>
-          </div>
-
-          {/* Links columns */}
-          {isDemoSiteMode && (
-            <div className='grid grid-cols-3 gap-8 md:gap-16'>
-              {displayColumns.map((column, index) => (
-                <div key={index}>
-                  <p className='text-muted-foreground/50 mb-3 text-xs font-medium tracking-wider uppercase'>
-                    {t(column.title)}
-                  </p>
-                  <ul className='space-y-2.5'>
-                    {column.links.map((link, linkIndex) => (
-                      <li key={linkIndex}>
-                        <FooterLinkItem link={link} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Copyright + optional legal links inline on the left, project
-            attribution on the right; wraps on narrow screens. */}
-        <div className='border-border/30 mt-12 flex flex-col items-center justify-between gap-x-3 gap-y-2 border-t pt-6 sm:flex-row'>
-          <div className='text-muted-foreground/40 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs sm:justify-start'>
             <span>
-              &copy; {currentYear} {displayName}.{' '}
-              {props.copyright ?? t('footer.defaultCopyright')}
+              &copy; {currentYear}. {props.copyright ?? t('footer.defaultCopyright')}
             </span>
-            <LegalLinks leadingSeparator />
+            <LegalLinks enabled={showLegalLinks} leadingSeparator />
           </div>
-          <ProjectAttribution currentYear={currentYear} />
+          <ProjectAttribution />
         </div>
       </div>
     </footer>

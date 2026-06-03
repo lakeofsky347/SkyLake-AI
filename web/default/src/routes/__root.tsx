@@ -22,6 +22,7 @@ import {
   createRootRouteWithContext,
   Outlet,
   redirect,
+  useRouterState,
 } from '@tanstack/react-router'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
@@ -29,14 +30,19 @@ import { ThemeCustomizationProvider } from '@/context/theme-customization-provid
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { Toaster } from '@/components/ui/sonner'
 import { NavigationProgress } from '@/components/navigation-progress'
+import { saveAffiliateCode } from '@/features/auth/lib/storage'
 import { GeneralError } from '@/features/errors/general-error'
 import { NotFoundError } from '@/features/errors/not-found-error'
 import { getSetupStatus } from '@/features/setup/api'
-import { saveAffiliateCode } from '@/features/auth/lib/storage'
 
 function RootComponent() {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  })
+  const shouldAutoLoadSystemConfig = pathname !== '/'
+
   // Load system configuration (logo, system name, etc.) from backend
-  useSystemConfig({ autoLoad: true })
+  useSystemConfig({ autoLoad: shouldAutoLoadSystemConfig })
 
   useEffect(() => {
     const aff = new URLSearchParams(window.location.search).get('aff')?.trim()

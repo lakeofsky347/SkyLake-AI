@@ -161,17 +161,24 @@ func Register(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
 		return
 	}
-	if user.Email == "" || user.VerificationCode == "" {
-		common.ApiErrorI18n(c, i18n.MsgUserEmailVerificationRequired)
-		return
-	}
-	if err := common.Validate.Var(user.Email, "required,email"); err != nil {
-		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
-		return
-	}
-	if !common.VerifyCodeWithKey(user.Email, user.VerificationCode, common.EmailVerificationPurpose) {
-		common.ApiErrorI18n(c, i18n.MsgUserVerificationCodeError)
-		return
+	if common.EmailVerificationEnabled {
+		if user.Email == "" || user.VerificationCode == "" {
+			common.ApiErrorI18n(c, i18n.MsgUserEmailVerificationRequired)
+			return
+		}
+		if err := common.Validate.Var(user.Email, "required,email"); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
+			return
+		}
+		if !common.VerifyCodeWithKey(user.Email, user.VerificationCode, common.EmailVerificationPurpose) {
+			common.ApiErrorI18n(c, i18n.MsgUserVerificationCodeError)
+			return
+		}
+	} else if user.Email != "" {
+		if err := common.Validate.Var(user.Email, "email"); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
+			return
+		}
 	}
 	exist, err := model.CheckUserExistOrDeleted(user.Username, user.Email)
 	if err != nil {
@@ -197,7 +204,9 @@ func Register(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	common.DeleteKey(user.Email, common.EmailVerificationPurpose)
+	if common.EmailVerificationEnabled && user.Email != "" {
+		common.DeleteKey(user.Email, common.EmailVerificationPurpose)
+	}
 
 	// 获取插入后的用户ID
 	var insertedUser model.User

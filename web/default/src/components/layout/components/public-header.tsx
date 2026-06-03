@@ -50,6 +50,29 @@ type AuthPromptTarget = {
   href: string
 }
 
+function PublicHeaderNotificationControls() {
+  const notifications = useNotifications()
+
+  return (
+    <>
+      <NotificationButton
+        unreadCount={notifications.unreadCount}
+        onClick={() => notifications.openDialog()}
+      />
+      <NotificationDialog
+        open={notifications.dialogOpen}
+        onOpenChange={notifications.setDialogOpen}
+        activeTab={notifications.activeTab}
+        onTabChange={notifications.setActiveTab}
+        notice={notifications.notice}
+        announcements={notifications.announcements}
+        loading={notifications.loading}
+        onCloseToday={notifications.closeToday}
+      />
+    </>
+  )
+}
+
 export interface PublicHeaderProps {
   navLinks?: TopNavLink[]
   mobileLinks?: TopNavLink[]
@@ -88,14 +111,16 @@ export function PublicHeader(props: PublicHeaderProps) {
   const [authPromptSecondsLeft, setAuthPromptSecondsLeft] =
     useState(AUTH_PROMPT_SECONDS)
   const { auth } = useAuthStore()
+  const needsSystemBrand = !customLogo || !customSiteName
+  const systemConfig = useSystemConfig()
   const {
     systemName,
     logo: systemLogo,
-    loading,
+    loading: systemConfigLoading,
     logoLoaded,
-  } = useSystemConfig()
-  const dynamicLinks = useTopNavLinks()
-  const notifications = useNotifications()
+  } = systemConfig
+  const loading = needsSystemBrand ? systemConfigLoading : false
+  const dynamicLinks = useTopNavLinks({ enabled: props.navLinks == null })
   const routerState = useRouterState()
   const pathname = routerState.location.pathname
 
@@ -224,13 +249,13 @@ export function PublicHeader(props: PublicHeaderProps) {
             <div className='hidden items-center gap-0.5 sm:flex'>
               {links.map((link, i) => {
                 const isActive = pathname === link.href
-                if (link.external) {
+                if (link.external || link.href.startsWith('#')) {
                   return (
                     <a
                       key={i}
                       href={link.href}
-                      target='_blank'
-                      rel='noopener noreferrer'
+                      target={link.external ? '_blank' : undefined}
+                      rel={link.external ? 'noopener noreferrer' : undefined}
                       aria-disabled={link.disabled}
                       tabIndex={link.disabled ? -1 : undefined}
                       onClick={(event) => handleNavLinkClick(event, link)}
@@ -270,12 +295,7 @@ export function PublicHeader(props: PublicHeaderProps) {
 
               {showLanguageSwitcher && <LanguageSwitcher />}
               {showThemeSwitch && <ThemeSwitch />}
-              {showNotifications && (
-                <NotificationButton
-                  unreadCount={notifications.unreadCount}
-                  onClick={() => notifications.openDialog()}
-                />
-              )}
+              {showNotifications && <PublicHeaderNotificationControls />}
 
               {showAuthButtons && (
                 <>
@@ -361,13 +381,13 @@ export function PublicHeader(props: PublicHeaderProps) {
               const transitionStyle = {
                 transitionDelay: mobileOpen ? `${100 + i * 50}ms` : '0ms',
               }
-              if (link.external) {
+              if (link.external || link.href.startsWith('#')) {
                 return (
                   <a
                     key={i}
                     href={link.href}
-                    target='_blank'
-                    rel='noopener noreferrer'
+                    target={link.external ? '_blank' : undefined}
+                    rel={link.external ? 'noopener noreferrer' : undefined}
                     aria-disabled={link.disabled}
                     tabIndex={link.disabled ? -1 : undefined}
                     onClick={(event) => handleNavLinkClick(event, link, true)}
@@ -445,20 +465,6 @@ export function PublicHeader(props: PublicHeaderProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Notification Dialog */}
-      {showNotifications && (
-        <NotificationDialog
-          open={notifications.dialogOpen}
-          onOpenChange={notifications.setDialogOpen}
-          activeTab={notifications.activeTab}
-          onTabChange={notifications.setActiveTab}
-          notice={notifications.notice}
-          announcements={notifications.announcements}
-          loading={notifications.loading}
-          onCloseToday={notifications.closeToday}
-        />
-      )}
     </>
   )
 }

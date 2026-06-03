@@ -16,16 +16,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { AxiosRequestConfig } from 'axios'
 import { api } from '@/lib/api'
 import type { SetupFormValues, SetupResponse } from './types'
 
 export async function getSetupStatus(): Promise<SetupResponse> {
   const res = await api.get('/api/setup', {
+    skipErrorHandler: true,
     // We want fresh status on every visit.
     params: {
       t: Date.now(),
     },
-  })
+  } as AxiosRequestConfig & { skipErrorHandler: boolean })
   return res.data
 }
 

@@ -18,7 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { type ReactNode, useState, useEffect } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
-import { ChevronRight } from 'lucide-react'
+import { ArrowRight01Icon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
 import { Badge } from '@/components/ui/badge'
 import {
   Collapsible,
@@ -173,7 +174,11 @@ function SidebarMenuCollapsible({
         {item.icon && <item.icon />}
         <span>{item.title}</span>
         {item.badge && <NavBadge>{item.badge}</NavBadge>}
-        <ChevronRight className='ms-auto transition-transform duration-200 group-data-[panel-open]/collapsible-trigger:rotate-90' />
+        <HugeiconsIcon
+          icon={ArrowRight01Icon}
+          strokeWidth={2}
+          className='ms-auto transition-transform duration-200 group-data-[panel-open]/collapsible-trigger:rotate-90'
+        />
       </CollapsibleTrigger>
       <CollapsibleContent className='CollapsibleContent'>
         <SidebarMenuSub>
@@ -222,7 +227,11 @@ function SidebarMenuCollapsedDropdown({
           {item.icon && <item.icon />}
           <span>{item.title}</span>
           {item.badge && <NavBadge>{item.badge}</NavBadge>}
-          <ChevronRight className='ms-auto transition-transform duration-200 group-data-[popup-open]/dropdown-trigger:rotate-90' />
+          <HugeiconsIcon
+            icon={ArrowRight01Icon}
+            strokeWidth={2}
+            className='ms-auto transition-transform duration-200 group-data-[popup-open]/dropdown-trigger:rotate-90'
+          />
         </DropdownMenuTrigger>
         <DropdownMenuContent side='right' align='start' sideOffset={4}>
           <DropdownMenuGroup>

@@ -19,7 +19,8 @@
     /* Alias */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "lucide-react": ["./src/lib/lucide-hugeicons.tsx"]
     },
 
     /* Linting */

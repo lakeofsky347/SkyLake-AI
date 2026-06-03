@@ -35,9 +35,10 @@ function getInitialStatus(): SystemStatus | undefined {
   return undefined
 }
 
-export function useStatus() {
+export function useStatus(options?: { enabled?: boolean }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['status'],
+    enabled: options?.enabled ?? true,
     queryFn: async () => {
       const status = await getStatus()
       try {

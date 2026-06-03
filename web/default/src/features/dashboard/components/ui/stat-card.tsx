@@ -183,7 +183,7 @@ function StatCardDetails(props: { details: StatCardDetail[] }) {
       {props.details.map((detail) => (
         <div
           key={detail.label}
-          className='bg-muted/40 rounded-lg border border-transparent px-2.5 py-2'
+          className='bg-background/55 rounded-lg border px-2.5 py-2'
         >
           <div className='text-muted-foreground truncate text-[11px] leading-none font-medium'>
             {detail.label}

@@ -63,6 +63,7 @@ export function SectionPageLayout(props: SectionPageLayoutProps) {
   )
 
   let title: ReactNode = null
+  let description: ReactNode = null
   let actions: ReactNode = null
   let content: ReactNode = null
   let breadcrumb: ReactNode = null
@@ -71,6 +72,8 @@ export function SectionPageLayout(props: SectionPageLayoutProps) {
     if (!isValidElement(node)) return
     const child = node as ReactElement<SlotProps>
     if (child.type === SectionPageLayoutTitle) title = child.props.children
+    else if (child.type === SectionPageLayoutDescription)
+      description = child.props.children
     else if (child.type === SectionPageLayoutActions)
       actions = child.props.children
     else if (child.type === SectionPageLayoutContent)
@@ -82,7 +85,7 @@ export function SectionPageLayout(props: SectionPageLayoutProps) {
   return (
     <PageFooterProvider container={footerContainer}>
       <Main>
-        <div className='shrink-0 px-3 pt-3 pb-2.5 sm:px-4 sm:pt-5 sm:pb-3'>
+        <div className='tech-section-header shrink-0 px-3 pt-3 pb-2.5 sm:px-4 sm:pt-5 sm:pb-3'>
           {breadcrumb != null && (
             <div className='mb-2 sm:mb-3'>{breadcrumb}</div>
           )}
@@ -91,6 +94,11 @@ export function SectionPageLayout(props: SectionPageLayoutProps) {
               <h2 className='truncate text-base font-bold tracking-tight sm:text-lg'>
                 {title}
               </h2>
+              {description != null && (
+                <p className='text-muted-foreground mt-1 line-clamp-2 text-xs leading-relaxed sm:text-sm'>
+                  {description}
+                </p>
+              )}
             </div>
             {actions != null && (
               <div className='flex shrink-0 flex-wrap items-center gap-2 sm:gap-x-4'>
