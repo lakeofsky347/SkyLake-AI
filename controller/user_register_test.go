@@ -114,7 +114,7 @@ func performRegisterRequest(t *testing.T, payload model.User) registerAPIRespons
 	return response
 }
 
-func TestRegisterRequiresEmailVerificationWhenSettingDisabled(t *testing.T) {
+func TestRegisterAllowsPasswordSignupWhenEmailVerificationDisabled(t *testing.T) {
 	db := setupRegisterControllerTestDB(t)
 
 	response := performRegisterRequest(t, model.User{
@@ -122,21 +122,30 @@ func TestRegisterRequiresEmailVerificationWhenSettingDisabled(t *testing.T) {
 		Password: "password123",
 	})
 
-	if response.Success {
-		t.Fatalf("Register success = true, want false")
+	if !response.Success {
+		t.Fatalf("Register success = false, message: %s", response.Message)
 	}
 
 	var count int64
 	if err := db.Model(&model.User{}).Count(&count).Error; err != nil {
 		t.Fatalf("failed to count users: %v", err)
 	}
-	if count != 0 {
-		t.Fatalf("user count = %d, want 0", count)
+	if count != 1 {
+		t.Fatalf("user count = %d, want 1", count)
+	}
+
+	var user model.User
+	if err := db.Where("username = ?", "alice").First(&user).Error; err != nil {
+		t.Fatalf("failed to load registered user: %v", err)
+	}
+	if user.Email != "" {
+		t.Fatalf("registered email = %q, want empty", user.Email)
 	}
 }
 
 func TestRegisterWithEmailVerificationStoresEmailAndConsumesCode(t *testing.T) {
 	db := setupRegisterControllerTestDB(t)
+	common.EmailVerificationEnabled = true
 	email := "bob@example.com"
 	code := "123456"
 	common.RegisterVerificationCodeWithKey(email, code, common.EmailVerificationPurpose)
@@ -167,8 +176,31 @@ func TestRegisterWithEmailVerificationStoresEmailAndConsumesCode(t *testing.T) {
 	}
 }
 
+func TestRegisterRequiresEmailVerificationWhenEnabled(t *testing.T) {
+	db := setupRegisterControllerTestDB(t)
+	common.EmailVerificationEnabled = true
+
+	response := performRegisterRequest(t, model.User{
+		Username: "dave",
+		Password: "password123",
+	})
+
+	if response.Success {
+		t.Fatalf("Register success = true, want false")
+	}
+
+	var count int64
+	if err := db.Model(&model.User{}).Count(&count).Error; err != nil {
+		t.Fatalf("failed to count users: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("user count = %d, want 0", count)
+	}
+}
+
 func TestRegisterRejectsInvalidEmailVerificationCode(t *testing.T) {
 	db := setupRegisterControllerTestDB(t)
+	common.EmailVerificationEnabled = true
 	email := "carol@example.com"
 	common.RegisterVerificationCodeWithKey(email, "123456", common.EmailVerificationPurpose)
 	t.Cleanup(func() {
