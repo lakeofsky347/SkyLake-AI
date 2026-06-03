@@ -127,14 +127,11 @@ function LegalLinks(props: { leadingSeparator?: boolean; enabled?: boolean }) {
 
 function SkyLakeFooterMark() {
   return (
-    <span
-      aria-hidden='true'
-      className='relative grid size-7 place-items-center overflow-hidden rounded-lg border border-[#b9dcff] bg-[#f5faff]'
-    >
-      <span className='absolute inset-x-1 bottom-1 h-2 rounded-full bg-[#0a84ff]/15' />
-      <span className='absolute top-1.5 left-1.5 h-3 w-4.5 rounded-full border-2 border-[#0071e3] border-b-transparent' />
-      <span className='absolute right-1.5 bottom-2 h-2 w-3.5 rounded-full bg-[#56ccff]/45' />
-    </span>
+    <img
+      src='/logo.png'
+      alt='SkyLake AI Logo'
+      className='size-7 object-contain'
+    />
   )
 }
 

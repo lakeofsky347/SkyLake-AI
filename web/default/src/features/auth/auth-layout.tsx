@@ -53,8 +53,11 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         )}
       </Link>
       <div className='container flex items-center pt-16 sm:pt-0'>
-        <div className='mx-auto flex w-full flex-col justify-center rounded-2xl border border-slate-200 bg-white/92 px-5 py-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur sm:w-[480px] sm:p-8'>
-          {children}
+        <div className='relative group mx-auto w-full sm:w-[480px]'>
+          <div className='absolute -inset-0.5 bg-gradient-to-r from-blue-400 to-blue-600 rounded-2xl blur opacity-30 group-hover:opacity-60 transition duration-1000 group-hover:duration-200'></div>
+          <div className='relative flex flex-col justify-center rounded-2xl border border-slate-200 bg-white/92 px-5 py-8 shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-md sm:p-8'>
+            {children}
+          </div>
         </div>
       </div>
     </div>

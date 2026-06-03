@@ -775,3 +775,14 @@ For commercial licensing, please contact support@quantumnous.com
     animation: none !important;
   }
 }
+
+@keyframes border-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-border-flow {
+  background-size: 200% auto;
+  animation: border-flow 3s linear infinite;
+}

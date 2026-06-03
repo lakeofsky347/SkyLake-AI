@@ -46,17 +46,11 @@ type HugeIcon = ComponentProps<typeof HugeiconsIcon>['icon']
 
 function SkyLakeMark(props: { className?: string }) {
   return (
-    <div
-      aria-hidden='true'
-      className={cn(
-        'relative grid size-8 place-items-center overflow-hidden rounded-lg border border-[#b9dcff] bg-[#f5faff]',
-        props.className
-      )}
-    >
-      <span className='absolute inset-x-1 bottom-1 h-2 rounded-full bg-[#0a84ff]/15' />
-      <span className='absolute top-2 left-1.5 h-3 w-5 rounded-full border-2 border-[#0071e3] border-b-transparent' />
-      <span className='absolute right-1.5 bottom-2 h-2.5 w-4 rounded-full bg-[#56ccff]/45' />
-    </div>
+    <img
+      src='/logo.png'
+      alt='SkyLake AI Logo'
+      className={cn('size-8 object-contain', props.className)}
+    />
   )
 }
 
@@ -115,10 +109,10 @@ function SplitCard(props: {
     <Link
       to={props.href}
       className={cn(
-        'group block rounded-2xl border bg-white p-5 text-left shadow-[0_18px_60px_rgba(15,23,42,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_28px_80px_rgba(15,23,42,0.12)] sm:p-8',
+        'group flex flex-col h-full rounded-2xl border bg-white p-5 text-left shadow-lg shadow-slate-200/50 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-primary/10 hover:border-primary/30 sm:p-8',
         props.tone === 'chat'
           ? 'border-[#b9dcff]'
-          : 'border-slate-200'
+          : 'border-slate-200/60'
       )}
     >
       <div
@@ -139,10 +133,10 @@ function SplitCard(props: {
       </p>
       <div
         className={cn(
-          'mt-5 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-colors sm:mt-8',
+          'mt-auto pt-6 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-all sm:mt-auto',
           props.tone === 'chat'
-            ? 'bg-[#0071e3] text-white group-hover:bg-[#0077ed]'
-            : 'bg-slate-950 text-white group-hover:bg-slate-800'
+            ? 'bg-gradient-to-r from-blue-400 to-blue-600 text-white animate-border-flow hover:scale-105 shadow-[0_0_15px_rgba(0,113,227,0.4)]'
+            : 'bg-slate-950 text-white hover:bg-slate-800'
         )}
       >
         {props.buttonLabel}
