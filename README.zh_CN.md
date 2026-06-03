@@ -1,480 +1,219 @@
-<div align="center">
+# AI Gateway MVP
 
-![new-api](/web/default/public/logo.png)
+面向低技术背景用户的多模型 API 中转站与 Web 聊天平台。
 
-# New API
+本仓库当前处于 **MVP 收口阶段**：核心目标不是复刻上游 API 网关，而是在保留多模型接入、渠道管理、计费统计和用户管理能力的基础上，补齐面向终端用户的对话入口、附件能力与后续订阅制运营基础。
 
-🍥 **新一代大模型网关与AI资产管理系统**
-
-<p align="center">
-  简体中文 |
-  <a href="./README.zh_TW.md">繁體中文</a> |
-  <a href="./README.md">English</a> |
-  <a href="./README.fr.md">Français</a> |
-  <a href="./README.ja.md">日本語</a>
-</p>
-
-<p align="center">
-  <a href="https://raw.githubusercontent.com/Calcium-Ion/new-api/main/LICENSE">
-    <img src="https://img.shields.io/github/license/Calcium-Ion/new-api?color=brightgreen" alt="license">
-  </a><!--
-  --><a href="https://github.com/Calcium-Ion/new-api/releases/latest">
-    <img src="https://img.shields.io/github/v/release/Calcium-Ion/new-api?color=brightgreen&include_prereleases" alt="release">
-  </a><!--
-  --><a href="https://hub.docker.com/r/CalciumIon/new-api">
-    <img src="https://img.shields.io/badge/docker-dockerHub-blue" alt="docker">
-  </a><!--
-  --><a href="https://goreportcard.com/report/github.com/Calcium-Ion/new-api">
-    <img src="https://goreportcard.com/badge/github.com/Calcium-Ion/new-api" alt="GoReportCard">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://trendshift.io/repositories/20180" target="_blank">
-    <img src="https://trendshift.io/api/badge/repositories/20180" alt="QuantumNous%2Fnew-api | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
-  </a>
-  <br>
-  <a href="https://hellogithub.com/repository/QuantumNous/new-api" target="_blank">
-    <img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=539ac4217e69431684ad4a0bab768811&claim_uid=tbFPfKIDHpc4TzR" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54" />
-  </a><!--
-  --><a href="https://www.producthunt.com/products/new-api/launches/new-api?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-new-api" target="_blank" rel="noopener noreferrer">
-    <img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1047693&theme=light&t=1769577875005" alt="New API - All-in-one AI asset management gateway. | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" />
-  </a>
-</p>
-
-<p align="center">
-  <a href="#-快速开始">快速开始</a> •
-  <a href="#-主要特性">主要特性</a> •
-  <a href="#-部署">部署</a> •
-  <a href="#-文档">文档</a> •
-  <a href="#-帮助支持">帮助</a>
-</p>
-
-</div>
-
-## 📝 项目说明
-
-> [!IMPORTANT]
-> - 本项目仅面向合法授权的 AI API 网关、组织内部鉴权、多模型管理、用量统计、成本核算和私有化部署场景。
-> - 使用者必须合法取得上游 API Key、账号、模型服务或接口权限，并遵守上游服务条款及适用法律法规。
-> - 使用者应确保其使用方式符合上游服务条款及适用法律法规。
-> - 面向公众提供生成式人工智能服务时，使用者应遵守[《生成式人工智能服务管理暂行办法》](http://www.cac.gov.cn/2023-07/13/c_1690898327029107.htm)等监管要求，自行完成所在司法辖区要求的备案、许可、内容安全、实名、日志留存、税务和上游授权等合规义务。
+> 当前分支：`MVP`
+>
+> 推荐部署方式：Docker Compose 自构建镜像。
 
 ---
 
-## 🤝 我们信任的合作伙伴
+## 项目定位
 
-<p align="center">
-  <em>排名不分先后</em>
-</p>
+本项目用于构建一个可私有化部署的 AI 服务中转平台，主要包含两类入口：
 
-<p align="center">
-  <a href="https://www.cherry-ai.com/" target="_blank">
-    <img src="./docs/images/cherry-studio.png" alt="Cherry Studio" height="80" />
-  </a><!--
-  --><a href="https://github.com/iOfficeAI/AionUi/" target="_blank">
-    <img src="./docs/images/aionui.png" alt="Aion UI" height="80" />
-  </a><!--
-  --><a href="https://bda.pku.edu.cn/" target="_blank">
-    <img src="./docs/images/pku.png" alt="北京大学" height="80" />
-  </a><!--
-  --><a href="https://www.compshare.cn/?ytag=GPU_yy_gh_newapi" target="_blank">
-    <img src="./docs/images/ucloud.png" alt="UCloud 优刻得" height="80" />
-  </a><!--
-  --><a href="https://www.aliyun.com/" target="_blank">
-    <img src="./docs/images/aliyun.png" alt="阿里云" height="80" />
-  </a><!--
-  --><a href="https://io.net/" target="_blank">
-    <img src="./docs/images/io-net.png" alt="IO.NET" height="80" />
-  </a>
-</p>
+1. **对话平台**：面向普通用户，用户在创建对话或发送消息时选择模型，平台负责调用上游模型并统一记录用量。
+2. **API 控制台**：面向具备一定技术背景的用户，提供令牌、渠道、模型、额度和日志管理能力。
 
----
+MVP 阶段优先保证以下闭环：
 
-## 🙏 特别鸣谢
-
-<p align="center">
-  <a href="https://www.jetbrains.com/?from=new-api" target="_blank">
-    <img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png" alt="JetBrains Logo" width="120" />
-  </a>
-</p>
-
-<p align="center">
-  <strong>感谢 <a href="https://www.jetbrains.com/?from=new-api">JetBrains</a> 为本项目提供免费的开源开发许可证</strong>
-</p>
-
----
-
-## 🚀 快速开始
-
-### 使用 Docker Compose（推荐）
-
-```bash
-# 克隆项目
-git clone https://github.com/QuantumNous/new-api.git
-cd new-api
-
-# 编辑 docker-compose.yml 配置
-nano docker-compose.yml
-
-# 启动服务
-docker-compose up -d
+```text
+用户登录 -> 创建对话 -> 选择模型 -> 发送消息 -> 记录用量 -> 后台可管理
 ```
 
-<details>
-<summary><strong>使用 Docker 命令</strong></summary>
+---
+
+## 当前能力
+
+### 对话平台
+
+- 会话创建与会话列表
+- 会话消息发送、重新生成与历史记录
+- 本地图片附件上传与管理
+- 模型选择入口
+- 与后台渠道、模型、计费逻辑联动
+
+### API 中转能力
+
+- 多上游渠道接入
+- OpenAI 兼容接口转发
+- 用户令牌管理
+- 模型权限管理
+- 用量日志与统计
+- 额度、分组与倍率配置
+
+### 管理能力
+
+- 用户管理
+- 渠道管理
+- 模型管理
+- 系统设置
+- 日志审计
+- 基础计费配置
+
+---
+
+## 技术栈
+
+| 模块 | 技术 |
+|---|---|
+| 后端 | Go |
+| 前端 | React / TypeScript |
+| 数据库 | PostgreSQL |
+| 缓存 | Redis |
+| 部署 | Docker / Docker Compose |
+| 反向代理 | Caddy / Nginx，可选 |
+
+---
+
+## 快速部署
+
+### 1. 克隆 MVP 分支
 
 ```bash
-# 拉取最新镜像
-docker pull calciumion/new-api:latest
-
-# 使用 SQLite（默认）
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
-
-# 使用 MySQL
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
+git clone -b MVP https://github.com/lakeofsky347/newapi_fork.git ai-gateway-mvp
+cd ai-gateway-mvp
 ```
 
-> **💡 提示：** `-v ./data:/data` 会将数据保存在当前目录的 `data` 文件夹中，你也可以改为绝对路径如 `-v /your/custom/path:/data`
-
-</details>
-
----
-
-🎉 部署完成后，访问 `http://localhost:3000` 即可使用！
-
-> [!WARNING]
-> 将本项目作为面向公众的生成式 AI 服务或 API 转售服务运营时，使用者应先完成备案、内容安全、实名、日志留存、税务、支付和上游授权等合规义务。
-
-📖 更多部署方式请参考 [部署指南](https://docs.newapi.pro/zh/docs/installation)
-
----
-
-## 📚 文档
-
-<div align="center">
-
-### 📖 [官方文档](https://docs.newapi.pro/zh/docs) | [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/QuantumNous/new-api)
-
-</div>
-
-**快速导航：**
-
-| 分类 | 链接 |
-|------|------|
-| 🚀 部署指南 | [安装文档](https://docs.newapi.pro/zh/docs/installation) |
-| ⚙️ 环境配置 | [环境变量](https://docs.newapi.pro/zh/docs/installation/config-maintenance/environment-variables) |
-| 📡 接口文档 | [API 文档](https://docs.newapi.pro/zh/docs/api) |
-| ❓ 常见问题 | [FAQ](https://docs.newapi.pro/zh/docs/support/faq) |
-| 💬 社区交流 | [交流渠道](https://docs.newapi.pro/zh/docs/support/community-interaction) |
-
----
-
-## ✨ 主要特性
-
-> 详细特性请参考 [特性说明](https://docs.newapi.pro/zh/docs/guide/wiki/basic-concepts/features-introduction)
-
-### 🎨 核心功能
-
-| 特性 | 说明 |
-|------|------|
-| 🎨 全新 UI | 现代化的用户界面设计 |
-| 🌍 多语言 | 支持中文、英文、法语、日语 |
-| 🔄 数据兼容 | 完全兼容原版 One API 数据库 |
-| 📈 数据看板 | 可视化控制台与统计分析 |
-| 🔒 权限管理 | 令牌分组、模型限制、用户管理 |
-
-### 💰 授权用量与成本管理
-
-- ✅ 合法授权场景下的内部充值与额度分配（易支付、Stripe）
-- ✅ 组织内按次、按量或缓存命中成本核算
-- ✅ 支持 OpenAI、Azure、DeepSeek、Claude、Qwen 等模型的缓存计费统计
-- ✅ 面向内部管理或企业客户的灵活计费策略配置
-
-### 🔐 授权与安全
-
-- 😈 Discord 授权登录
-- 🤖 LinuxDO 授权登录
-- 📱 Telegram 授权登录
-- 🔑 OIDC 统一认证
-- 🔍 Key 查询使用额度（配合 [new-api-key-tool](https://github.com/Calcium-Ion/new-api-key-tool)）
-
-### 🚀 高级功能
-
-**API 格式支持：**
-- ⚡ [OpenAI Responses](https://docs.newapi.pro/zh/docs/api/ai-model/chat/openai/create-response)
-- ⚡ [OpenAI Realtime API](https://docs.newapi.pro/zh/docs/api/ai-model/realtime/create-realtime-session)（含 Azure）
-- ⚡ [Claude Messages](https://docs.newapi.pro/zh/docs/api/ai-model/chat/create-message)
-- ⚡ [Google Gemini](https://doc.newapi.pro/api/google-gemini-chat)
-- 🔄 [Rerank 模型](https://docs.newapi.pro/zh/docs/api/ai-model/rerank/create-rerank)（Cohere、Jina）
-
-**智能路由：**
-- ⚖️ 渠道加权随机
-- 🔄 失败自动重试
-- 🚦 用户级别模型限流
-
-**格式转换：**
-- 🔄 **OpenAI Compatible ⇄ Claude Messages**
-- 🔄 **OpenAI Compatible → Google Gemini**
-- 🔄 **Google Gemini → OpenAI Compatible** - 仅支持文本，暂不支持函数调用
-- 🚧 **OpenAI Compatible ⇄ OpenAI Responses** - 开发中
-- 🔄 **思考转内容功能**
-
-**Reasoning Effort 支持：**
-
-<details>
-<summary>查看详细配置</summary>
-
-**OpenAI 系列模型：**
-- `o3-mini-high` - High reasoning effort
-- `o3-mini-medium` - Medium reasoning effort
-- `o3-mini-low` - Low reasoning effort
-- `gpt-5-high` - High reasoning effort
-- `gpt-5-medium` - Medium reasoning effort
-- `gpt-5-low` - Low reasoning effort
-
-**Claude 思考模型：**
-- `claude-3-7-sonnet-20250219-thinking` - 启用思考模式
-
-**Google Gemini 系列模型：**
-- `gemini-2.5-flash-thinking` - 启用思考模式
-- `gemini-2.5-flash-nothinking` - 禁用思考模式
-- `gemini-2.5-pro-thinking` - 启用思考模式
-- `gemini-2.5-pro-thinking-128` - 启用思考模式，并设置思考预算为128tokens
-- 也可以直接在 Gemini 模型名称后追加 `-low` / `-medium` / `-high` 来控制思考力度（无需再设置思考预算后缀）
-
-</details>
-
----
-
-## 🤖 模型支持
-
-> 详情请参考 [接口文档 - 网关接口](https://docs.newapi.pro/zh/docs/api)
-
-| 模型类型 | 说明 | 文档 |
-|---------|------|------|
-| 🤖 OpenAI-Compatible | OpenAI 兼容模型 | [文档](https://docs.newapi.pro/zh/docs/api/ai-model/chat/openai/createchatcompletion) |
-| 🤖 OpenAI Responses | OpenAI Responses 格式 | [文档](https://docs.newapi.pro/zh/docs/api/ai-model/chat/openai/createresponse) |
-| 🎨 Midjourney-Proxy | [Midjourney-Proxy(Plus)](https://github.com/novicezk/midjourney-proxy) | [文档](https://doc.newapi.pro/api/midjourney-proxy-image) |
-| 🎵 Suno-API | [Suno API](https://github.com/Suno-API/Suno-API) | [文档](https://doc.newapi.pro/api/suno-music) |
-| 🔄 Rerank | Cohere、Jina | [文档](https://docs.newapi.pro/zh/docs/api/ai-model/rerank/create-rerank) |
-| 💬 Claude | Messages 格式 | [文档](https://docs.newapi.pro/zh/docs/api/ai-model/chat/createmessage) |
-| 🌐 Gemini | Google Gemini 格式 | [文档](https://docs.newapi.pro/zh/docs/api/ai-model/chat/gemini/geminirelayv1beta) |
-| 🔧 Dify | ChatFlow 模式 | - |
-| 🎯 自定义上游 | 支持配置合法授权的上游接口地址 | - |
-
-### 📡 支持的接口
-
-<details>
-<summary>查看完整接口列表</summary>
-
-- [聊天接口 (Chat Completions)](https://docs.newapi.pro/zh/docs/api/ai-model/chat/openai/createchatcompletion)
-- [响应接口 (Responses)](https://docs.newapi.pro/zh/docs/api/ai-model/chat/openai/createresponse)
-- [图像接口 (Image)](https://docs.newapi.pro/zh/docs/api/ai-model/images/openai/post-v1-images-generations)
-- [音频接口 (Audio)](https://docs.newapi.pro/zh/docs/api/ai-model/audio/openai/create-transcription)
-- [视频接口 (Video)](https://docs.newapi.pro/zh/docs/api/ai-model/audio/openai/createspeech)
-- [嵌入接口 (Embeddings)](https://docs.newapi.pro/zh/docs/api/ai-model/embeddings/createembedding)
-- [重排序接口 (Rerank)](https://docs.newapi.pro/zh/docs/api/ai-model/rerank/creatererank)
-- [实时对话 (Realtime)](https://docs.newapi.pro/zh/docs/api/ai-model/realtime/createrealtimesession)
-- [Claude 聊天](https://docs.newapi.pro/zh/docs/api/ai-model/chat/createmessage)
-- [Google Gemini 聊天](https://docs.newapi.pro/zh/docs/api/ai-model/chat/gemini/geminirelayv1beta)
-
-</details>
-
----
-
-## 🚢 部署
-
-> [!TIP]
-> **最新版 Docker 镜像：** `calciumion/new-api:latest`
-
-### 📋 部署要求
-
-| 组件 | 要求 |
-|------|------|
-| **本地数据库** | SQLite（Docker 需挂载 `/data` 目录）|
-| **远程数据库** | MySQL ≥ 5.7.8 或 PostgreSQL ≥ 9.6 |
-| **容器引擎** | Docker / Docker Compose |
-
-### ⚙️ 环境变量配置
-
-<details>
-<summary>常用环境变量配置</summary>
-
-| 变量名 | 说明                                                           | 默认值 |
-|--------|--------------------------------------------------------------|--------|
-| `SESSION_SECRET` | 会话密钥（多机部署必须）                                                 | - |
-| `CRYPTO_SECRET` | 加密密钥（Redis 必须）                                               | - |
-| `SQL_DSN` | 数据库连接字符串                                                     | - |
-| `REDIS_CONN_STRING` | Redis 连接字符串                                                  | - |
-| `STREAMING_TIMEOUT` | 流式超时时间（秒）                                                    | `300` |
-| `STREAM_SCANNER_MAX_BUFFER_MB` | 流式扫描器单行最大缓冲（MB），图像生成等超大 `data:` 片段（如 4K 图片 base64）需适当调大 | `64` |
-| `MAX_REQUEST_BODY_MB` | 请求体最大大小（MB，**解压后**计；防止超大请求/zip bomb 导致内存暴涨），超过将返回 `413` | `32` |
-| `AZURE_DEFAULT_API_VERSION` | Azure API 版本                                                 | `2025-04-01-preview` |
-| `ERROR_LOG_ENABLED` | 错误日志开关                                                       | `false` |
-| `PYROSCOPE_URL` | Pyroscope 服务地址                                            | - |
-| `PYROSCOPE_APP_NAME` | Pyroscope 应用名                                        | `new-api` |
-| `PYROSCOPE_BASIC_AUTH_USER` | Pyroscope Basic Auth 用户名                        | - |
-| `PYROSCOPE_BASIC_AUTH_PASSWORD` | Pyroscope Basic Auth 密码                  | - |
-| `PYROSCOPE_MUTEX_RATE` | Pyroscope mutex 采样率                               | `5` |
-| `PYROSCOPE_BLOCK_RATE` | Pyroscope block 采样率                               | `5` |
-| `HOSTNAME` | Pyroscope 标签里的主机名                                          | `new-api` |
-
-📖 **完整配置：** [环境变量文档](https://docs.newapi.pro/zh/docs/installation/config-maintenance/environment-variables)
-
-</details>
-
-### 🔧 部署方式
-
-<details>
-<summary><strong>方式 1：Docker Compose（推荐）</strong></summary>
+### 2. 创建环境变量文件
 
 ```bash
-# 克隆项目
-git clone https://github.com/QuantumNous/new-api.git
-cd new-api
-
-# 编辑配置
-nano docker-compose.yml
-
-# 启动服务
-docker-compose up -d
+cp .env.example .env
+nano .env
 ```
 
-</details>
+至少修改以下配置：
 
-<details>
-<summary><strong>方式 2：Docker 命令</strong></summary>
+```env
+POSTGRES_PASSWORD=请改成强密码
+REDIS_PASSWORD=请改成强密码
+SESSION_SECRET=请改成至少32位随机字符串
+FRONTEND_BASE_URL=http://localhost:3000
+TRUSTED_REDIRECT_DOMAINS=localhost,127.0.0.1
+```
 
-**使用 SQLite：**
+生成随机密钥：
+
 ```bash
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
+openssl rand -hex 32
 ```
 
-**使用 MySQL：**
+### 3. 构建并启动
+
 ```bash
-docker run --name new-api -d --restart always \
-  -p 3000:3000 \
-  -e SQL_DSN="root:123456@tcp(localhost:3306)/oneapi" \
-  -e TZ=Asia/Shanghai \
-  -v ./data:/data \
-  calciumion/new-api:latest
+docker compose up -d --build
 ```
 
-> **💡 路径说明：**
-> - `./data:/data` - 相对路径，数据保存在当前目录的 data 文件夹
-> - 也可使用绝对路径，如：`/your/custom/path:/data`
+查看状态：
 
-</details>
+```bash
+docker compose ps
+docker compose logs -f app
+```
 
-<details>
-<summary><strong>方式 3：宝塔面板</strong></summary>
+本地或服务器测试：
 
-1. 安装宝塔面板（≥ 9.2.0 版本）
-2. 在应用商店搜索 **New-API**
-3. 一键安装
+```text
+http://服务器公网IP:3000
+```
 
-📖 [图文教程](./docs/installation/BT.md)
-
-</details>
-
-### ⚠️ 多机部署注意事项
-
-> [!WARNING]
-> - **必须设置** `SESSION_SECRET` - 否则登录状态不一致
-> - **公用 Redis 必须设置** `CRYPTO_SECRET` - 否则数据无法解密
-
-### 🔄 渠道重试与缓存
-
-**重试配置：** `设置 → 运营设置 → 通用设置 → 失败重试次数`
-
-**缓存配置：**
-- `REDIS_CONN_STRING`：Redis 缓存（推荐）
-- `MEMORY_CACHE_ENABLED`：内存缓存
+正式上线时建议使用 Caddy 或 Nginx 反向代理到容器内的 `3000` 端口，并绑定域名与 HTTPS。
 
 ---
 
-## 🔗 相关项目
+## 首次启动后的必要操作
 
-### 上游项目
+首次启动并初始化数据库后，请立即完成：
 
-| 项目 | 说明 |
-|------|------|
-| [One API](https://github.com/songquanpeng/one-api) | 原版项目基础 |
-| [Midjourney-Proxy](https://github.com/novicezk/midjourney-proxy) | Midjourney 接口支持 |
-
-### 配套工具
-
-| 项目 | 说明 |
-|------|------|
-| [new-api-key-tool](https://github.com/Calcium-Ion/new-api-key-tool) | Key 额度查询工具 |
-| [new-api-horizon](https://github.com/Calcium-Ion/new-api-horizon) | New API 高性能优化版 |
+1. 登录后台。
+2. 修改默认管理员密码。
+3. 关闭不需要的公开注册入口。
+4. 配置上游模型渠道。
+5. 配置模型倍率、分组与用户额度。
+6. 创建测试用户并验证对话、API、日志和计费链路。
 
 ---
 
-## 💬 帮助支持
+## 生产部署建议
 
-### 📖 文档资源
+MVP 阶段推荐单机部署：
 
-| 资源 | 链接 |
-|------|------|
-| 📘 常见问题 | [FAQ](https://docs.newapi.pro/zh/docs/support/faq) |
-| 💬 社区交流 | [交流渠道](https://docs.newapi.pro/zh/docs/support/community-interaction) |
-| 🐛 反馈问题 | [问题反馈](https://docs.newapi.pro/zh/docs/support/feedback-issues) |
-| 📚 完整文档 | [官方文档](https://docs.newapi.pro/zh/docs) |
+```text
+VPS
+├── Docker Compose
+├── app：AI Gateway MVP
+├── postgres：业务数据库
+├── redis：缓存
+└── caddy / nginx：HTTPS 与反向代理
+```
 
-### 🤝 贡献指南
+建议服务器规格：
 
-欢迎各种形式的贡献！
-
-- 🐛 报告 Bug
-- 💡 提出新功能
-- 📝 改进文档
-- 🔧 提交代码
-
----
-
-## 📜 许可证
-
-本项目采用 [GNU Affero 通用公共许可证 v3.0 (AGPLv3)](./LICENSE) 授权。
-
-本项目为开源项目，在 [One API](https://github.com/songquanpeng/one-api)（MIT 许可证）的基础上进行二次开发。
-
-如果您所在的组织政策不允许使用 AGPLv3 许可的软件，或您希望规避 AGPLv3 的开源义务，请发送邮件至：[support@quantumnous.com](mailto:support@quantumnous.com)
+| 项目 | 建议 |
+|---|---|
+| CPU | 2 核起步，4 核以上更稳 |
+| 内存 | 4 GB 起步，8 GB 更稳 |
+| 硬盘 | 40 GB 起步，建议挂载独立数据盘 |
+| 系统 | Ubuntu 22.04 / 24.04 LTS |
 
 ---
 
-## 🌟 Star History
+## 安全注意事项
 
-<div align="center">
+不要在生产环境使用默认密码。至少需要设置：
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Calcium-Ion/new-api&type=Date)](https://star-history.com/#Calcium-Ion/new-api&Date)
+```env
+POSTGRES_PASSWORD=强密码
+REDIS_PASSWORD=强密码
+SESSION_SECRET=随机长密钥
+```
 
-</div>
+同时建议：
+
+- 数据库和 Redis 不暴露到公网。
+- 仅开放 `22`、`80`、`443`。
+- 使用 HTTPS。
+- 定期备份 PostgreSQL 数据。
+- 保留系统日志和调用日志。
+- 上线前检查支付、订阅、退款和用户协议等运营规则。
 
 ---
 
-<div align="center">
+## 合规与许可证
 
-### 💖 感谢使用 New API
+本仓库为基于 AGPLv3 许可代码的二次开发版本，仍遵循 GNU Affero General Public License v3.0。公开部署、分发或提供网络服务时，应遵守 AGPLv3 的源代码提供义务和相关版权声明要求。
 
-如果这个项目对你有帮助，欢迎给我们一个 ⭐️ Star！
+本项目仅应在合法授权场景下使用。运营者需要自行确保：
 
-**[官方文档](https://docs.newapi.pro/zh/docs)** • **[问题反馈](https://github.com/Calcium-Ion/new-api/issues)** • **[最新发布](https://github.com/Calcium-Ion/new-api/releases)**
+- 已合法取得上游模型服务、API Key 或接口权限；
+- 遵守上游服务条款；
+- 遵守所在司法辖区关于生成式人工智能服务、数据安全、隐私保护、支付、税务和消费者权益保护等要求；
+- 不将本项目用于绕过访问控制、滥用模型服务或其他违法用途。
 
-<sub>Built with ❤️ by QuantumNous</sub>
+---
 
-</div>
+## 当前开发重点
+
+- [ ] 完成 MVP 分支生产部署验证
+- [ ] 整理前端品牌与默认文案
+- [ ] 将用户侧输出策略统一为非流式最终输出
+- [ ] 完善订阅制、预储值和按次卡计费设计
+- [ ] 补充生产环境备份与回滚文档
+- [ ] 补充用户协议、隐私政策与合规说明
+
+---
+
+## 维护说明
+
+当前仓库以 `MVP` 分支为上线验证分支。生产部署前，请优先确认：
+
+```bash
+git branch --show-current
+git status
+docker compose config
+docker compose up -d --build
+```
+
+如需正式商用，请在完成安全、合规、备份、监控、支付与用户协议后再开放给外部用户。
