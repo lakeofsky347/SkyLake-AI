@@ -16,6 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import {
+  PORTAL_BRAND_NAME,
+  SkyLakeBrandMark,
+} from '@/components/brand/portal-brand'
 import type { TopNavLink } from '../types'
 import { PublicHeader, type PublicHeaderProps } from './public-header'
 
@@ -33,6 +37,9 @@ type PublicLayoutProps = {
 }
 
 export function PublicLayout(props: PublicLayoutProps) {
+  const displayLogo = props.logo ?? <SkyLakeBrandMark className='size-full' />
+  const displaySiteName = props.siteName ?? PORTAL_BRAND_NAME
+
   return (
     <div className='bg-background text-foreground relative min-h-svh overflow-x-clip'>
       <PublicHeader
@@ -41,8 +48,8 @@ export function PublicLayout(props: PublicLayoutProps) {
         showThemeSwitch={props.showThemeSwitch}
         showAuthButtons={props.showAuthButtons}
         showNotifications={props.showNotifications}
-        logo={props.logo}
-        siteName={props.siteName}
+        logo={displayLogo}
+        siteName={displaySiteName}
         {...props.headerProps}
       />
 

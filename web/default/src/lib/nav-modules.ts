@@ -35,10 +35,12 @@ export type HeaderNavModules = {
 const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
   home: true,
   console: true,
-  pricing: { enabled: true, requireAuth: false },
-  rankings: { enabled: true, requireAuth: false },
-  docs: true,
-  about: true,
+  // Keep the public default surface minimal until the operator explicitly
+  // enables extra modules from settings or status payloads.
+  pricing: { enabled: false, requireAuth: false },
+  rankings: { enabled: false, requireAuth: false },
+  docs: false,
+  about: false,
 }
 
 const DEFAULTS: Record<HeaderNavModule, ModuleAccess> = {

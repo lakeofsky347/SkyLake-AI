@@ -33,6 +33,11 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
+import {
+  PORTAL_BRAND_NAME,
+  SKYLAKE_BRAND_LOGO_DATA_URI,
+  SkyLakeBrandMark,
+} from '@/components/brand/portal-brand'
 import { cn } from '@/lib/utils'
 import { Markdown } from '@/components/ui/markdown'
 import { AnimateInView } from '@/components/animate-in-view'
@@ -40,16 +45,13 @@ import { PublicLayout } from '@/components/layout'
 import { Footer } from '@/components/layout/components/footer'
 import { useHomePageContent } from './hooks'
 
-const PORTAL_BRAND_NAME = 'SkyLake AI'
-
 type HugeIcon = ComponentProps<typeof HugeiconsIcon>['icon']
 
-function SkyLakeMark(props: { className?: string }) {
+function SiteMark(props: { name: string; className?: string }) {
   return (
-    <img
-      src='/logo.png'
-      alt='SkyLake AI Logo'
+    <SkyLakeBrandMark
       className={cn('size-8 object-contain', props.className)}
+      aria-label={`${props.name} Logo`}
     />
   )
 }
@@ -75,7 +77,7 @@ function ArrowIcon(props: { down?: boolean }) {
   )
 }
 
-function PortalShell(props: { children: ReactNode }) {
+function PortalShell(props: { children: ReactNode; brandName: string }) {
   const navLinks = [
     { title: 'Chat', href: '/chat', requiresAuth: true },
     { title: 'API Console', href: '/console', requiresAuth: true },
@@ -88,8 +90,8 @@ function PortalShell(props: { children: ReactNode }) {
       navLinks={navLinks}
       showThemeSwitch={false}
       showNotifications={false}
-      siteName={PORTAL_BRAND_NAME}
-      logo={<SkyLakeMark />}
+      siteName={props.brandName}
+      logo={<SiteMark name={props.brandName} />}
       headerProps={{ showLanguageSwitcher: true }}
     >
       {props.children}
@@ -189,7 +191,7 @@ function ModelCard(props: {
   )
 }
 
-function ModelShowcase() {
+function ModelShowcase(props: { brandName: string }) {
   const { t } = useTranslation()
   const models = [
     {
@@ -245,7 +247,10 @@ function ModelShowcase() {
           </h2>
           <p className='mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600'>
             {t(
-              'SkyLake AI brings leading model families into one clean access layer for chat and API workflows.'
+              '{{brandName}} brings leading model families into one clean access layer for chat and API workflows.',
+              {
+                brandName: props.brandName,
+              }
             )}
           </p>
         </AnimateInView>
@@ -290,10 +295,11 @@ export function Home() {
   const { auth } = useAuthStore()
   const isAuthenticated = !!auth.user
   const { content, isLoaded, isUrl } = useHomePageContent()
+  const portalBrandName = PORTAL_BRAND_NAME
 
   if (!isLoaded) {
     return (
-      <PortalShell>
+      <PortalShell brandName={portalBrandName}>
         <main className='flex min-h-screen items-center justify-center bg-white'>
           <div className='text-slate-500'>{t('Loading...')}</div>
         </main>
@@ -303,7 +309,7 @@ export function Home() {
 
   if (content) {
     return (
-      <PortalShell>
+      <PortalShell brandName={portalBrandName}>
         <main className='overflow-x-hidden bg-white text-slate-950'>
           {isUrl ? (
             <iframe
@@ -322,7 +328,7 @@ export function Home() {
   }
 
   return (
-    <PortalShell>
+    <PortalShell brandName={portalBrandName}>
       <main className='overflow-hidden bg-white text-slate-950'>
         <section className='relative min-h-[calc(100svh-1px)] px-4 pt-24 pb-10 sm:px-6 sm:pt-28 sm:pb-12 md:pt-36'>
           <div
@@ -331,8 +337,11 @@ export function Home() {
           />
           <div className='relative z-10 mx-auto max-w-6xl'>
             <div className='mx-auto max-w-4xl text-center'>
+              <div className='mb-6 flex justify-center sm:mb-8'>
+                <SkyLakeBrandMark className='size-16 drop-shadow-[0_18px_40px_rgba(37,99,235,0.18)] sm:size-20' />
+              </div>
               <h1 className='text-5xl leading-none font-semibold tracking-tight text-slate-950 sm:text-7xl lg:text-8xl'>
-                {PORTAL_BRAND_NAME}
+                {portalBrandName}
               </h1>
               <p className='mx-auto mt-4 max-w-2xl text-lg leading-7 text-slate-600 sm:mt-6 sm:text-2xl sm:leading-8'>
                 {t('One account. Two ways to use AI.')}
@@ -376,11 +385,11 @@ export function Home() {
           </div>
         </section>
 
-        <ModelShowcase />
+        <ModelShowcase brandName={portalBrandName} />
       </main>
       <Footer
-        name={PORTAL_BRAND_NAME}
-        logo='/logo.png'
+        name={portalBrandName}
+        logo={SKYLAKE_BRAND_LOGO_DATA_URI}
         copyright={t('All rights reserved by this site.')}
         compact
         showLegalLinks={false}
