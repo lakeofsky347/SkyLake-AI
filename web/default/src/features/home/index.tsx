@@ -382,6 +382,7 @@ export function Home() {
         name={PORTAL_BRAND_NAME}
         logo='/logo.png'
         copyright={t('All rights reserved by this site.')}
+        compact
         showLegalLinks={false}
       />
     </PortalShell>
