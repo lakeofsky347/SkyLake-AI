@@ -104,6 +104,7 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/console/dashboard/overview': { section: 'console', module: 'detail' },
   '/console/dashboard/models': { section: 'console', module: 'detail' },
   '/console/dashboard/users': { section: 'console', module: 'detail' },
+  '/console/models': { section: 'console', module: 'detail' },
   '/keys': { section: 'console', module: 'token' },
   '/console/keys': { section: 'console', module: 'token' },
   '/usage-logs': { section: 'console', module: 'log' },

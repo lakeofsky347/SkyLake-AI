@@ -17,7 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMemo, useCallback, useState } from 'react'
-import { useSearch } from '@tanstack/react-router'
 import {
   FILTER_ALL,
   SORT_OPTIONS,
@@ -28,20 +27,10 @@ import {
   type ViewMode,
 } from '../constants'
 import { filterAndSortModels, extractAllTags } from '../lib/filters'
+import type { PricingSearch } from '../search'
 import type { PricingModel, TokenUnit } from '../types'
 
-type FilterState = {
-  search?: string
-  sort?: string
-  vendor?: string
-  group?: string
-  quotaType?: string
-  endpointType?: string
-  tag?: string
-  tokenUnit?: TokenUnit
-  view?: ViewMode
-  rechargePrice?: boolean
-}
+type FilterState = PricingSearch
 
 function normalizeViewMode(value: unknown): ViewMode {
   if (value === VIEW_MODES.TABLE) {
@@ -50,19 +39,21 @@ function normalizeViewMode(value: unknown): ViewMode {
   return VIEW_MODES.CARD
 }
 
-export function useFilters(models: PricingModel[]) {
-  const search = useSearch({ from: '/pricing/' })
+export function useFilters(
+  models: PricingModel[],
+  initialFilters?: FilterState
+) {
   const [filterState, setFilterState] = useState<FilterState>(() => ({
-    search: search.search,
-    sort: search.sort,
-    vendor: search.vendor,
-    group: search.group,
-    quotaType: search.quotaType,
-    endpointType: search.endpointType,
-    tag: search.tag,
-    tokenUnit: search.tokenUnit,
-    view: search.view,
-    rechargePrice: search.rechargePrice,
+    search: initialFilters?.search,
+    sort: initialFilters?.sort,
+    vendor: initialFilters?.vendor,
+    group: initialFilters?.group,
+    quotaType: initialFilters?.quotaType,
+    endpointType: initialFilters?.endpointType,
+    tag: initialFilters?.tag,
+    tokenUnit: initialFilters?.tokenUnit,
+    view: initialFilters?.view,
+    rechargePrice: initialFilters?.rechargePrice,
   }))
 
   const searchInput = filterState.search || ''

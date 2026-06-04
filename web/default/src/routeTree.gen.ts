@@ -81,6 +81,7 @@ import { Route as AuthenticatedConsoleWalletIndexRouteImport } from './routes/_a
 import { Route as AuthenticatedConsoleUsageLogsIndexRouteImport } from './routes/_authenticated/console/usage-logs/index'
 import { Route as AuthenticatedConsoleProfileIndexRouteImport } from './routes/_authenticated/console/profile/index'
 import { Route as AuthenticatedConsolePlaygroundIndexRouteImport } from './routes/_authenticated/console/playground/index'
+import { Route as AuthenticatedConsoleModelsIndexRouteImport } from './routes/_authenticated/console/models/index'
 import { Route as AuthenticatedConsoleKeysIndexRouteImport } from './routes/_authenticated/console/keys/index'
 import { Route as AuthenticatedConsoleDashboardIndexRouteImport } from './routes/_authenticated/console/dashboard/index'
 import { Route as AuthenticatedAdminUsersIndexRouteImport } from './routes/_authenticated/admin/users/index'
@@ -510,6 +511,12 @@ const AuthenticatedConsolePlaygroundIndexRoute =
     path: '/playground/',
     getParentRoute: () => AuthenticatedConsoleRouteRoute,
   } as any)
+const AuthenticatedConsoleModelsIndexRoute =
+  AuthenticatedConsoleModelsIndexRouteImport.update({
+    id: '/models/',
+    path: '/models/',
+    getParentRoute: () => AuthenticatedConsoleRouteRoute,
+  } as any)
 const AuthenticatedConsoleKeysIndexRoute =
   AuthenticatedConsoleKeysIndexRouteImport.update({
     id: '/keys/',
@@ -781,6 +788,7 @@ export interface FileRoutesByFullPath {
   '/admin/users/': typeof AuthenticatedAdminUsersIndexRoute
   '/console/dashboard/': typeof AuthenticatedConsoleDashboardIndexRoute
   '/console/keys/': typeof AuthenticatedConsoleKeysIndexRoute
+  '/console/models/': typeof AuthenticatedConsoleModelsIndexRoute
   '/console/playground/': typeof AuthenticatedConsolePlaygroundIndexRoute
   '/console/profile/': typeof AuthenticatedConsoleProfileIndexRoute
   '/console/usage-logs/': typeof AuthenticatedConsoleUsageLogsIndexRoute
@@ -870,6 +878,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AuthenticatedAdminUsersIndexRoute
   '/console/dashboard': typeof AuthenticatedConsoleDashboardIndexRoute
   '/console/keys': typeof AuthenticatedConsoleKeysIndexRoute
+  '/console/models': typeof AuthenticatedConsoleModelsIndexRoute
   '/console/playground': typeof AuthenticatedConsolePlaygroundIndexRoute
   '/console/profile': typeof AuthenticatedConsoleProfileIndexRoute
   '/console/usage-logs': typeof AuthenticatedConsoleUsageLogsIndexRoute
@@ -977,6 +986,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/users/': typeof AuthenticatedAdminUsersIndexRoute
   '/_authenticated/console/dashboard/': typeof AuthenticatedConsoleDashboardIndexRoute
   '/_authenticated/console/keys/': typeof AuthenticatedConsoleKeysIndexRoute
+  '/_authenticated/console/models/': typeof AuthenticatedConsoleModelsIndexRoute
   '/_authenticated/console/playground/': typeof AuthenticatedConsolePlaygroundIndexRoute
   '/_authenticated/console/profile/': typeof AuthenticatedConsoleProfileIndexRoute
   '/_authenticated/console/usage-logs/': typeof AuthenticatedConsoleUsageLogsIndexRoute
@@ -1083,6 +1093,7 @@ export interface FileRouteTypes {
     | '/admin/users/'
     | '/console/dashboard/'
     | '/console/keys/'
+    | '/console/models/'
     | '/console/playground/'
     | '/console/profile/'
     | '/console/usage-logs/'
@@ -1172,6 +1183,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/console/dashboard'
     | '/console/keys'
+    | '/console/models'
     | '/console/playground'
     | '/console/profile'
     | '/console/usage-logs'
@@ -1278,6 +1290,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/users/'
     | '/_authenticated/console/dashboard/'
     | '/_authenticated/console/keys/'
+    | '/_authenticated/console/models/'
     | '/_authenticated/console/playground/'
     | '/_authenticated/console/profile/'
     | '/_authenticated/console/usage-logs/'
@@ -1832,6 +1845,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedConsolePlaygroundIndexRouteImport
       parentRoute: typeof AuthenticatedConsoleRouteRoute
     }
+    '/_authenticated/console/models/': {
+      id: '/_authenticated/console/models/'
+      path: '/models'
+      fullPath: '/console/models/'
+      preLoaderRoute: typeof AuthenticatedConsoleModelsIndexRouteImport
+      parentRoute: typeof AuthenticatedConsoleRouteRoute
+    }
     '/_authenticated/console/keys/': {
       id: '/_authenticated/console/keys/'
       path: '/keys'
@@ -2191,6 +2211,7 @@ interface AuthenticatedConsoleRouteRouteChildren {
   AuthenticatedConsoleUsageLogsSectionRoute: typeof AuthenticatedConsoleUsageLogsSectionRoute
   AuthenticatedConsoleDashboardIndexRoute: typeof AuthenticatedConsoleDashboardIndexRoute
   AuthenticatedConsoleKeysIndexRoute: typeof AuthenticatedConsoleKeysIndexRoute
+  AuthenticatedConsoleModelsIndexRoute: typeof AuthenticatedConsoleModelsIndexRoute
   AuthenticatedConsolePlaygroundIndexRoute: typeof AuthenticatedConsolePlaygroundIndexRoute
   AuthenticatedConsoleProfileIndexRoute: typeof AuthenticatedConsoleProfileIndexRoute
   AuthenticatedConsoleUsageLogsIndexRoute: typeof AuthenticatedConsoleUsageLogsIndexRoute
@@ -2207,6 +2228,7 @@ const AuthenticatedConsoleRouteRouteChildren: AuthenticatedConsoleRouteRouteChil
     AuthenticatedConsoleDashboardIndexRoute:
       AuthenticatedConsoleDashboardIndexRoute,
     AuthenticatedConsoleKeysIndexRoute: AuthenticatedConsoleKeysIndexRoute,
+    AuthenticatedConsoleModelsIndexRoute: AuthenticatedConsoleModelsIndexRoute,
     AuthenticatedConsolePlaygroundIndexRoute:
       AuthenticatedConsolePlaygroundIndexRoute,
     AuthenticatedConsoleProfileIndexRoute:

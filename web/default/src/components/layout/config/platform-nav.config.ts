@@ -17,7 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { TFunction } from 'i18next'
-import { ROLE } from '@/lib/roles'
 import {
   Activity,
   Box,
@@ -36,6 +35,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { PLATFORM_ROUTES } from '@/lib/platform-routes'
+import { ROLE } from '@/lib/roles'
 import type { NavGroup } from '../types'
 
 export function getConsoleNavGroups(t: TFunction): NavGroup[] {
@@ -45,14 +45,19 @@ export function getConsoleNavGroups(t: TFunction): NavGroup[] {
       title: t('API Console'),
       items: [
         {
-          title: t('Playground'),
-          url: '/console/playground',
-          icon: FlaskConical,
-        },
-        {
           title: t('Overview'),
           url: '/console/dashboard/overview',
           icon: Activity,
+        },
+        {
+          title: t('Model Square'),
+          url: '/console/models',
+          icon: Box,
+        },
+        {
+          title: t('Playground'),
+          url: '/console/playground',
+          icon: FlaskConical,
         },
         {
           title: t('Dashboard'),

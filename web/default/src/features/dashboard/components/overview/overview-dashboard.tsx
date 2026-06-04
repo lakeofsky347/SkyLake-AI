@@ -80,10 +80,10 @@ const SETUP_GUIDE_CODE_PATTERN = [
 type DashboardActionPath =
   | '/console/keys'
   | '/console/wallet'
+  | '/console/models'
   | '/console/playground'
   | '/admin/channels'
   | '/console/usage-logs'
-  | '/pricing'
 
 interface StartStep {
   title: string
@@ -509,6 +509,12 @@ export function OverviewDashboard() {
   const quickActions = useMemo<QuickAction[]>(
     () => [
       {
+        title: t('Model Square'),
+        description: t('Browse available models, capabilities, and pricing'),
+        to: '/console/models',
+        icon: BookOpen,
+      },
+      {
         title: t('Playground'),
         description: t('Test models and prompts from the browser'),
         to: '/console/playground',
@@ -526,12 +532,6 @@ export function OverviewDashboard() {
         description: t('Inspect requests, errors, and billing details'),
         to: '/console/usage-logs',
         icon: FileText,
-      },
-      {
-        title: t('Pricing'),
-        description: t('Review model rates before scaling traffic'),
-        to: '/pricing',
-        icon: BookOpen,
       },
     ],
     [t]
@@ -630,10 +630,7 @@ export function OverviewDashboard() {
                         <ChevronUp data-icon='inline-start' />
                         {t('Hide setup guide')}
                       </Button>
-                      <Button
-                        size='sm'
-                        render={<Link to='/console/keys' />}
-                      >
+                      <Button size='sm' render={<Link to='/console/keys' />}>
                         <KeyRound data-icon='inline-start' />
                         {t('Create API Key')}
                       </Button>

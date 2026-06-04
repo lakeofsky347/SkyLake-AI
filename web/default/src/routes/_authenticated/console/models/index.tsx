@@ -17,33 +17,25 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { useAuthStore } from '@/stores/auth-store'
-import { getFreshModuleAccess } from '@/lib/nav-modules'
+import { isSidebarModuleEnabled } from '@/lib/nav-modules'
 import { Pricing } from '@/features/pricing'
 import { pricingSearchSchema } from '@/features/pricing/search'
 
-export const Route = createFileRoute('/pricing/')({
+export const Route = createFileRoute('/_authenticated/console/models/')({
   validateSearch: pricingSearchSchema,
-  beforeLoad: async ({ location }) => {
-    const access = await getFreshModuleAccess('pricing')
-    if (!access.enabled) {
-      throw redirect({ to: '/' })
-    }
-    if (access.requireAuth) {
-      const { auth } = useAuthStore.getState()
-      if (!auth.user) {
-        throw redirect({
-          to: '/sign-in',
-          search: { redirect: location.href },
-        })
-      }
+  beforeLoad: () => {
+    if (!isSidebarModuleEnabled('console', 'detail')) {
+      throw redirect({
+        to: '/console/dashboard/$section',
+        params: { section: 'overview' },
+      })
     }
   },
-  component: PricingPage,
+  component: ModelSquarePage,
 })
 
-function PricingPage() {
+function ModelSquarePage() {
   const search = Route.useSearch()
 
-  return <Pricing initialFilters={search} />
+  return <Pricing embedded initialFilters={search} />
 }
