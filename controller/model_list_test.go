@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,20 @@ type listModelsResponse struct {
 	Success bool               `json:"success"`
 	Data    []dto.OpenAIModels `json:"data"`
 	Object  string             `json:"object"`
+}
+
+type userModelOptionResponse struct {
+	Label                  string                  `json:"label"`
+	Value                  string                  `json:"value"`
+	Category               string                  `json:"category"`
+	Description            string                  `json:"description"`
+	SupportedEndpointTypes []constant.EndpointType `json:"supported_endpoint_types"`
+}
+
+type userModelsResponse struct {
+	Success      bool                      `json:"success"`
+	Data         []string                  `json:"data"`
+	ModelOptions []userModelOptionResponse `json:"model_options"`
 }
 
 func setupModelListControllerTestDB(t *testing.T) *gorm.DB {
@@ -130,6 +145,16 @@ func withSelfUseModeDisabled(t *testing.T) {
 	})
 }
 
+func withSelfUseModeEnabled(t *testing.T) {
+	t.Helper()
+
+	original := operation_setting.SelfUseModeEnabled
+	operation_setting.SelfUseModeEnabled = true
+	t.Cleanup(func() {
+		operation_setting.SelfUseModeEnabled = original
+	})
+}
+
 func decodeListModelsResponse(t *testing.T, recorder *httptest.ResponseRecorder) map[string]struct{} {
 	t.Helper()
 
@@ -152,6 +177,16 @@ func pricingByModelName(pricings []model.Pricing) map[string]model.Pricing {
 		byName[pricing.ModelName] = pricing
 	}
 	return byName
+}
+
+func decodeUserModelsResponse(t *testing.T, recorder *httptest.ResponseRecorder) userModelsResponse {
+	t.Helper()
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var payload userModelsResponse
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.True(t, payload.Success)
+	return payload
 }
 
 func TestListModelsIncludesTieredBillingModel(t *testing.T) {
@@ -239,4 +274,121 @@ func TestListModelsTokenLimitIncludesTieredBillingModel(t *testing.T) {
 	require.NotContains(t, ids, "zz-token-tiered-empty-expr-model")
 	require.NotContains(t, ids, "zz-token-tiered-missing-expr-model")
 	require.NotContains(t, ids, "zz-token-unpriced-model")
+}
+
+func TestGetUserModelsSupportsSelectedGroup(t *testing.T) {
+	withSelfUseModeEnabled(t)
+
+	db := setupModelListControllerTestDB(t)
+	require.NoError(t, db.Create(&model.User{
+		Id:       2001,
+		Username: "group-model-user",
+		Password: "password",
+		Group:    "default",
+		Status:   common.UserStatusEnabled,
+	}).Error)
+	require.NoError(t, db.Create(&[]model.Ability{
+		{Group: "default", Model: "default-model", ChannelId: 1, Enabled: true},
+		{Group: "vip", Model: "vip-model", ChannelId: 2, Enabled: true},
+	}).Error)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/user/models?group=vip", nil)
+	ctx.Set("id", 2001)
+
+	GetUserModels(ctx)
+
+	payload := decodeUserModelsResponse(t, recorder)
+	require.Equal(t, []string{"vip-model"}, payload.Data)
+	require.Len(t, payload.ModelOptions, 1)
+	require.Equal(t, "vip-model", payload.ModelOptions[0].Value)
+}
+
+func TestGetUserModelsSupportsAutoGroupUnion(t *testing.T) {
+	withSelfUseModeEnabled(t)
+
+	originalAutoGroups := setting.GetAutoGroups()
+	autoGroupsJSON, err := common.Marshal([]string{"default", "vip"})
+	require.NoError(t, err)
+	require.NoError(t, setting.UpdateAutoGroupsByJsonString(string(autoGroupsJSON)))
+	t.Cleanup(func() {
+		restoreJSON, restoreErr := common.Marshal(originalAutoGroups)
+		require.NoError(t, restoreErr)
+		require.NoError(t, setting.UpdateAutoGroupsByJsonString(string(restoreJSON)))
+	})
+
+	originalUsableGroups := setting.GetUserUsableGroupsCopy()
+	usableGroupsJSON, err := common.Marshal(map[string]string{
+		"default": "Default Group",
+		"vip":     "VIP Group",
+		"auto":    "Auto Group",
+	})
+	require.NoError(t, err)
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(string(usableGroupsJSON)))
+	t.Cleanup(func() {
+		restoreJSON, restoreErr := common.Marshal(originalUsableGroups)
+		require.NoError(t, restoreErr)
+		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(string(restoreJSON)))
+	})
+
+	db := setupModelListControllerTestDB(t)
+	require.NoError(t, db.Create(&model.User{
+		Id:       2002,
+		Username: "auto-model-user",
+		Password: "password",
+		Group:    "default",
+		Status:   common.UserStatusEnabled,
+	}).Error)
+	require.NoError(t, db.Create(&[]model.Ability{
+		{Group: "default", Model: "default-model", ChannelId: 1, Enabled: true},
+		{Group: "vip", Model: "vip-model", ChannelId: 2, Enabled: true},
+	}).Error)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/user/models?group=auto", nil)
+	ctx.Set("id", 2002)
+
+	GetUserModels(ctx)
+
+	payload := decodeUserModelsResponse(t, recorder)
+	require.ElementsMatch(t, []string{"default-model", "vip-model"}, payload.Data)
+}
+
+func TestGetUserModelsReturnsModelOptionsMetadata(t *testing.T) {
+	withSelfUseModeEnabled(t)
+
+	db := setupModelListControllerTestDB(t)
+	require.NoError(t, db.Create(&model.User{
+		Id:       2003,
+		Username: "meta-model-user",
+		Password: "password",
+		Group:    "default",
+		Status:   common.UserStatusEnabled,
+	}).Error)
+	require.NoError(t, db.Create(&model.Model{
+		ModelName:   "reasoning-model",
+		Description: "Reasoning tuned model",
+		Tags:        "category:Reasoning",
+		Status:      1,
+	}).Error)
+	require.NoError(t, db.Create(&model.Ability{
+		Group:     "default",
+		Model:     "reasoning-model",
+		ChannelId: 1,
+		Enabled:   true,
+	}).Error)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/user/models?group=default", nil)
+	ctx.Set("id", 2003)
+
+	GetUserModels(ctx)
+
+	payload := decodeUserModelsResponse(t, recorder)
+	require.Len(t, payload.ModelOptions, 1)
+	require.Equal(t, "Reasoning", payload.ModelOptions[0].Category)
+	require.Equal(t, "Reasoning tuned model", payload.ModelOptions[0].Description)
 }

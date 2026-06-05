@@ -16,9 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useCallback, useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { getUserModels, getUserGroups } from './api'
+import { useCallback, useState } from 'react'
+import { AlertCircle } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { useGroupModelOptions } from '@/hooks/use-group-model-options'
 import { PlaygroundChat } from './components/playground-chat'
 import { PlaygroundInput } from './components/playground-input'
 import { usePlaygroundState, useChatHandler } from './hooks'
@@ -30,11 +31,7 @@ export function Playground() {
     config,
     parameterEnabled,
     messages,
-    models,
-    groups,
     updateMessages,
-    setModels,
-    setGroups,
     updateConfig,
   } = usePlaygroundState()
 
@@ -49,45 +46,19 @@ export function Playground() {
     null
   )
 
-  // Load models
-  const { data: modelsData, isLoading: isLoadingModels } = useQuery({
-    queryKey: ['playground-models'],
-    queryFn: getUserModels,
+  const {
+    groups,
+    models,
+    isLoadingModels,
+    noModelsMessage,
+    handleGroupChange,
+  } = useGroupModelOptions({
+    queryScope: 'playground',
+    selectedGroup: config.group,
+    selectedModel: config.model,
+    onGroupChange: (group) => updateConfig('group', group),
+    onModelChange: (model) => updateConfig('model', model),
   })
-
-  // Load groups
-  const { data: groupsData } = useQuery({
-    queryKey: ['playground-groups'],
-    queryFn: getUserGroups,
-  })
-
-  // Update models when data changes
-  useEffect(() => {
-    if (!modelsData) return
-
-    setModels(modelsData)
-
-    // Set default model if current model is not available
-    const isCurrentModelValid = modelsData.some((m) => m.value === config.model)
-    if (modelsData.length > 0 && !isCurrentModelValid) {
-      updateConfig('model', modelsData[0].value)
-    }
-  }, [modelsData, config.model, setModels, updateConfig])
-
-  // Update groups when data changes
-  useEffect(() => {
-    if (!groupsData) return
-
-    setGroups(groupsData)
-
-    const hasCurrentGroup = groupsData.some((g) => g.value === config.group)
-    if (!hasCurrentGroup && groupsData.length > 0) {
-      const fallback =
-        groupsData.find((g) => g.value === 'default')?.value ??
-        groupsData[0].value
-      updateConfig('group', fallback)
-    }
-  }, [groupsData, setGroups, config.group, updateConfig])
 
   const handleSendMessage = (text: string) => {
     const userMessage = createUserMessage(text)
@@ -183,6 +154,12 @@ export function Playground() {
 
       {/* Input area: center content and constrain to the same container width */}
       <div className='mx-auto w-full max-w-4xl'>
+        {noModelsMessage && (
+          <Alert className='mb-3'>
+            <AlertCircle className='size-4' />
+            <AlertDescription>{noModelsMessage}</AlertDescription>
+          </Alert>
+        )}
         <PlaygroundInput
           disabled={isGenerating}
           groups={groups}
@@ -191,7 +168,7 @@ export function Playground() {
           isModelLoading={isLoadingModels}
           modelValue={config.model}
           models={models}
-          onGroupChange={(value) => updateConfig('group', value)}
+          onGroupChange={handleGroupChange}
           onModelChange={(value) => updateConfig('model', value)}
           onStop={stopGeneration}
           onSubmit={handleSendMessage}

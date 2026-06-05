@@ -107,14 +107,14 @@ export function CCSwitchDialog(props: Props) {
 
   const { data: modelsData } = useQuery({
     queryKey: ['user-models-ccswitch'],
-    queryFn: getUserModels,
+    queryFn: () => getUserModels(),
     enabled: props.open,
     staleTime: 5 * 60 * 1000,
   })
 
   const modelOptions = useMemo(() => {
     const items = modelsData?.data ?? []
-    return items.map((m) => ({ value: m, label: m }))
+    return items.map((m: string) => ({ value: m, label: m }))
   }, [modelsData?.data])
 
   useEffect(() => {

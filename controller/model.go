@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -175,14 +176,25 @@ type modelListGroups struct {
 	ownerGroups []string
 }
 
+type userModelOption struct {
+	Label                  string                  `json:"label"`
+	Value                  string                  `json:"value"`
+	Category               string                  `json:"category,omitempty"`
+	Description            string                  `json:"description,omitempty"`
+	SupportedEndpointTypes []constant.EndpointType `json:"supported_endpoint_types,omitempty"`
+}
+
 func getModelListGroups(c *gin.Context) (modelListGroups, error) {
 	tokenGroup := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
 	userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
 	if userGroup == "" && (tokenGroup == "" || tokenGroup == "auto") {
-		var err error
-		userGroup, err = model.GetUserGroup(c.GetInt("id"), false)
-		if err != nil {
-			return modelListGroups{}, err
+		userId := c.GetInt("id")
+		if userId > 0 {
+			var err error
+			userGroup, err = model.GetUserGroup(userId, false)
+			if err != nil {
+				return modelListGroups{}, err
+			}
 		}
 	}
 
@@ -205,19 +217,211 @@ func getModelListGroups(c *gin.Context) (modelListGroups, error) {
 	}, nil
 }
 
-func ListModels(c *gin.Context, modelType int) {
-	acceptUnsetRatioModel := operation_setting.SelfUseModeEnabled
-	if !acceptUnsetRatioModel {
-		userId := c.GetInt("id")
-		if userId > 0 {
-			userSettings, _ := model.GetUserSetting(userId, false)
-			if userSettings.AcceptUnsetRatioModel {
-				acceptUnsetRatioModel = true
+func getModelListGroupsForSelectedGroup(userGroup string, selectedGroup string) (modelListGroups, error) {
+	selectedGroup = strings.TrimSpace(selectedGroup)
+	if selectedGroup == "" {
+		usableGroups := service.GetUserUsableGroups(userGroup)
+		ownerGroups := make([]string, 0, len(usableGroups))
+		for groupName := range usableGroups {
+			if groupName == "auto" {
+				continue
 			}
+			ownerGroups = append(ownerGroups, groupName)
+		}
+		sort.Strings(ownerGroups)
+		return modelListGroups{
+			userGroup:   userGroup,
+			ownerGroups: ownerGroups,
+		}, nil
+	}
+
+	if !service.GroupInUserUsableGroups(userGroup, selectedGroup) {
+		return modelListGroups{}, fmt.Errorf("group %s is not available for the current user", selectedGroup)
+	}
+
+	if selectedGroup == "auto" {
+		return modelListGroups{
+			userGroup:   userGroup,
+			tokenGroup:  selectedGroup,
+			ownerGroups: service.GetUserAutoGroup(userGroup),
+		}, nil
+	}
+
+	return modelListGroups{
+		userGroup:   userGroup,
+		tokenGroup:  selectedGroup,
+		ownerGroups: []string{selectedGroup},
+	}, nil
+}
+
+func shouldAcceptUnsetRatioModel(c *gin.Context) bool {
+	acceptUnsetRatioModel := operation_setting.SelfUseModeEnabled
+	if acceptUnsetRatioModel {
+		return true
+	}
+
+	userId := c.GetInt("id")
+	if userId <= 0 {
+		return false
+	}
+
+	userSettings, err := model.GetUserSetting(userId, false)
+	if err != nil {
+		return false
+	}
+	return userSettings.AcceptUnsetRatioModel
+}
+
+func collectUserModelNames(groups modelListGroups, acceptUnsetRatioModel bool, modelLimit map[string]bool) []string {
+	modelSet := make(map[string]struct{})
+	modelNames := make([]string, 0)
+	appendModel := func(modelName string) {
+		if _, exists := modelSet[modelName]; exists {
+			return
+		}
+		if !acceptUnsetRatioModel && !helper.HasModelBillingConfig(modelName) {
+			return
+		}
+		modelSet[modelName] = struct{}{}
+		modelNames = append(modelNames, modelName)
+	}
+
+	if len(modelLimit) > 0 {
+		for allowModel := range modelLimit {
+			appendModel(allowModel)
+		}
+		sort.Strings(modelNames)
+		return modelNames
+	}
+
+	for _, ownerGroup := range groups.ownerGroups {
+		for _, modelName := range model.GetGroupEnabledModels(ownerGroup) {
+			appendModel(modelName)
+		}
+	}
+	sort.Strings(modelNames)
+	return modelNames
+}
+
+func listModelsForGroups(c *gin.Context, modelType int, groups modelListGroups, modelLimit map[string]bool) ([]string, []dto.OpenAIModels, error) {
+	modelNames := collectUserModelNames(groups, shouldAcceptUnsetRatioModel(c), modelLimit)
+	ownerByModel := map[string]string{}
+	if len(groups.ownerGroups) > 0 {
+		ownerByModel = getPreferredModelOwners(modelNames, groups.ownerGroups)
+	}
+
+	openAIResult := make([]dto.OpenAIModels, 0, len(modelNames))
+	for _, modelName := range modelNames {
+		openAIResult = append(openAIResult, buildOpenAIModel(modelName, ownerByModel))
+	}
+	return modelNames, openAIResult, nil
+}
+
+func modelCategoryFromTags(tags string) string {
+	for _, rawTag := range strings.Split(tags, ",") {
+		tag := strings.TrimSpace(rawTag)
+		if tag == "" {
+			continue
+		}
+		lowerTag := strings.ToLower(tag)
+		switch {
+		case strings.HasPrefix(lowerTag, "category:"):
+			return strings.TrimSpace(tag[len("category:"):])
+		case strings.HasPrefix(lowerTag, "category="):
+			return strings.TrimSpace(tag[len("category="):])
+		case strings.HasPrefix(lowerTag, "group_tag:"):
+			return strings.TrimSpace(tag[len("group_tag:"):])
+		case strings.HasPrefix(lowerTag, "group_tag="):
+			return strings.TrimSpace(tag[len("group_tag="):])
+		}
+	}
+	return ""
+}
+
+func inferUserModelCategory(modelName string, item *model.Model, endpoints []constant.EndpointType) string {
+	if item != nil {
+		if category := modelCategoryFromTags(item.Tags); category != "" {
+			return category
 		}
 	}
 
-	userModelNames := make([]string, 0)
+	endpointSet := make(map[constant.EndpointType]struct{}, len(endpoints))
+	for _, endpoint := range endpoints {
+		endpointSet[endpoint] = struct{}{}
+	}
+
+	switch {
+	case hasEndpoint(endpointSet, constant.EndpointTypeImageGeneration):
+		return "Image"
+	case hasEndpoint(endpointSet, constant.EndpointTypeOpenAIVideo):
+		return "Video"
+	case hasEndpoint(endpointSet, constant.EndpointTypeEmbeddings):
+		return "Embeddings"
+	case hasEndpoint(endpointSet, constant.EndpointTypeJinaRerank):
+		return "Rerank"
+	}
+
+	lowerName := strings.ToLower(modelName)
+	switch {
+	case strings.Contains(lowerName, "whisper"),
+		strings.Contains(lowerName, "tts"),
+		strings.Contains(lowerName, "stt"),
+		strings.Contains(lowerName, "audio"),
+		strings.Contains(lowerName, "speech"):
+		return "Audio"
+	case strings.Contains(lowerName, "reason"),
+		strings.HasPrefix(lowerName, "o1"),
+		strings.HasPrefix(lowerName, "o3"),
+		strings.HasPrefix(lowerName, "o4"),
+		strings.Contains(lowerName, "thinking"),
+		strings.Contains(lowerName, "r1"):
+		return "Reasoning"
+	case strings.Contains(lowerName, "long"),
+		strings.Contains(lowerName, "context"),
+		strings.Contains(lowerName, "128k"),
+		strings.Contains(lowerName, "200k"),
+		strings.Contains(lowerName, "1m"):
+		return "Long Context"
+	default:
+		return "General Chat"
+	}
+}
+
+func hasEndpoint(endpoints map[constant.EndpointType]struct{}, endpoint constant.EndpointType) bool {
+	_, ok := endpoints[endpoint]
+	return ok
+}
+
+func buildUserModelOptions(openAIModels []dto.OpenAIModels) []userModelOption {
+	modelNames := make([]string, 0, len(openAIModels))
+	for _, item := range openAIModels {
+		modelNames = append(modelNames, item.Id)
+	}
+	modelMeta, err := model.GetModelsByNames(modelNames)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("GetModelsByNames error: %v", err))
+		modelMeta = map[string]*model.Model{}
+	}
+
+	options := make([]userModelOption, 0, len(openAIModels))
+	for _, item := range openAIModels {
+		meta := modelMeta[item.Id]
+		description := ""
+		if meta != nil {
+			description = strings.TrimSpace(meta.Description)
+		}
+		options = append(options, userModelOption{
+			Label:                  item.Id,
+			Value:                  item.Id,
+			Category:               inferUserModelCategory(item.Id, meta, item.SupportedEndpointTypes),
+			Description:            description,
+			SupportedEndpointTypes: item.SupportedEndpointTypes,
+		})
+	}
+	return options
+}
+
+func ListModels(c *gin.Context, modelType int) {
 	groups, err := getModelListGroups(c)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -226,55 +430,22 @@ func ListModels(c *gin.Context, modelType int) {
 		})
 		return
 	}
-	ownerGroups := groups.ownerGroups
 	modelLimitEnable := common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled)
+	modelLimit := map[string]bool{}
 	if modelLimitEnable {
 		s, ok := common.GetContextKey(c, constant.ContextKeyTokenModelLimit)
-		var tokenModelLimit map[string]bool
 		if ok {
-			tokenModelLimit = s.(map[string]bool)
-		} else {
-			tokenModelLimit = map[string]bool{}
-		}
-		for allowModel, _ := range tokenModelLimit {
-			if !acceptUnsetRatioModel {
-				if !helper.HasModelBillingConfig(allowModel) {
-					continue
-				}
-			}
-			userModelNames = append(userModelNames, allowModel)
-		}
-	} else {
-		var models []string
-		if groups.tokenGroup == "auto" {
-			for _, autoGroup := range ownerGroups {
-				groupModels := model.GetGroupEnabledModels(autoGroup)
-				for _, g := range groupModels {
-					if !common.StringsContains(models, g) {
-						models = append(models, g)
-					}
-				}
-			}
-		} else {
-			models = model.GetGroupEnabledModels(ownerGroups[0])
-		}
-		for _, modelName := range models {
-			if !acceptUnsetRatioModel {
-				if !helper.HasModelBillingConfig(modelName) {
-					continue
-				}
-			}
-			userModelNames = append(userModelNames, modelName)
+			modelLimit = s.(map[string]bool)
 		}
 	}
 
-	ownerByModel := map[string]string{}
-	if len(ownerGroups) > 0 {
-		ownerByModel = getPreferredModelOwners(userModelNames, ownerGroups)
-	}
-	userOpenAiModels := make([]dto.OpenAIModels, 0, len(userModelNames))
-	for _, modelName := range userModelNames {
-		userOpenAiModels = append(userOpenAiModels, buildOpenAIModel(modelName, ownerByModel))
+	_, userOpenAiModels, err := listModelsForGroups(c, modelType, groups, modelLimit)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
 	}
 
 	switch modelType {

@@ -25,6 +25,39 @@ import type {
   GroupOption,
 } from './types'
 
+type UserModelOptionPayload = {
+  label: string
+  value: string
+  category?: string
+  description?: string
+  supported_endpoint_types?: string[]
+}
+
+type UserModelsApiResponse = {
+  success: boolean
+  data?: string[]
+  model_options?: UserModelOptionPayload[]
+}
+
+const CHAT_COMPATIBLE_ENDPOINT_TYPES = new Set([
+  'openai',
+  'openai-response',
+  'openai-response-compact',
+  'anthropic',
+  'gemini',
+])
+
+function isChatCompatibleModel(
+  supportedEndpointTypes: string[] | undefined
+): boolean {
+  if (!supportedEndpointTypes || supportedEndpointTypes.length === 0) {
+    return true
+  }
+  return supportedEndpointTypes.some((endpoint) =>
+    CHAT_COMPATIBLE_ENDPOINT_TYPES.has(endpoint)
+  )
+}
+
 /**
  * Send chat completion request (non-streaming)
  */
@@ -40,18 +73,33 @@ export async function sendChatCompletion(
 /**
  * Get user available models
  */
-export async function getUserModels(): Promise<ModelOption[]> {
-  const res = await api.get(API_ENDPOINTS.USER_MODELS)
-  const { data } = res
+export async function getUserModels(group?: string): Promise<ModelOption[]> {
+  const res = await api.get(API_ENDPOINTS.USER_MODELS, {
+    params: group ? { group } : undefined,
+  })
+  const data = res.data as UserModelsApiResponse
 
   if (!data.success || !Array.isArray(data.data)) {
     return []
   }
 
-  return data.data.map((model: string) => ({
-    label: model,
-    value: model,
-  }))
+  const options: ModelOption[] = Array.isArray(data.model_options)
+    ? data.model_options.map((model) => ({
+        label: model.label || model.value,
+        value: model.value,
+        category: model.category,
+        description: model.description,
+        supportedEndpointTypes: model.supported_endpoint_types,
+      }))
+    : data.data.map((model: string) => ({
+        label: model,
+        value: model,
+        supportedEndpointTypes: undefined,
+      }))
+
+  return options.filter((model) =>
+    isChatCompatibleModel(model.supportedEndpointTypes)
+  )
 }
 
 /**

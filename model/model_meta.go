@@ -192,6 +192,26 @@ func GetPreferredModelOwnerChannelTypes(modelNames []string, groups []string) (m
 	return result, nil
 }
 
+func GetModelsByNames(modelNames []string) (map[string]*Model, error) {
+	result := make(map[string]*Model)
+	modelNames = normalizeLookupValues(modelNames)
+	if len(modelNames) == 0 {
+		return result, nil
+	}
+
+	var models []*Model
+	if err := DB.Where("model_name IN ?", modelNames).Find(&models).Error; err != nil {
+		return nil, err
+	}
+	for _, item := range models {
+		if item == nil {
+			continue
+		}
+		result[item.ModelName] = item
+	}
+	return result, nil
+}
+
 func SearchModels(keyword string, vendor string, offset int, limit int) ([]*Model, int64, error) {
 	var models []*Model
 	db := DB.Model(&Model{})

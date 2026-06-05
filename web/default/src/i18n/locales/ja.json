@@ -4603,6 +4603,10 @@
     "Zero retention": "データ保持なし",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V 4",
-    "Zoom": "ズーム"
+    "Zoom": "ズーム",
+    "General Chat": "一般チャット",
+    "Long Context": "長いコンテキスト",
+    "No models are currently available for the {{group}} group. Switch groups or contact an administrator.": "現在、{{group}} グループで利用可能なモデルはありません。グループを切り替えるか、管理者にお問い合わせください。",
+    "Switched to {{model}} because the previous model is unavailable in {{group}}.": "前のモデルは {{group}} グループで利用できないため、{{model}} に切り替えました。"
   }
 }

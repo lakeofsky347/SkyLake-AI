@@ -4603,6 +4603,10 @@
     "Zero retention": "Không lưu dữ liệu",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "General Chat": "Trò chuyện chung",
+    "Long Context": "Ngữ cảnh dài",
+    "No models are currently available for the {{group}} group. Switch groups or contact an administrator.": "Hiện không có mô hình nào khả dụng cho nhóm {{group}}. Hãy chuyển nhóm hoặc liên hệ quản trị viên.",
+    "Switched to {{model}} because the previous model is unavailable in {{group}}.": "Đã chuyển sang {{model}} vì mô hình trước đó không khả dụng trong nhóm {{group}}."
   }
 }

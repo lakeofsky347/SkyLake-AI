@@ -15,7 +15,6 @@ import (
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
@@ -529,28 +528,34 @@ func generateDefaultSidebarConfig(userRole int) string {
 }
 
 func GetUserModels(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		id = c.GetInt("id")
-	}
+	id := c.GetInt("id")
 	user, err := model.GetUserCache(id)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	groups := service.GetUserUsableGroups(user.Group)
-	var models []string
-	for group := range groups {
-		for _, g := range model.GetGroupEnabledModels(group) {
-			if !common.StringsContains(models, g) {
-				models = append(models, g)
-			}
-		}
+
+	selectedGroup := strings.TrimSpace(c.Query("group"))
+	groups, err := getModelListGroupsForSelectedGroup(user.Group, selectedGroup)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
 	}
+
+	modelNames, openAIModels, err := listModelsForGroups(c, constant.ChannelTypeOpenAI, groups, nil)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    models,
+		"success":       true,
+		"message":       "",
+		"data":          modelNames,
+		"model_options": buildUserModelOptions(openAIModels),
 	})
 	return
 }

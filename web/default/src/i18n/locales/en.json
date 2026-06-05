@@ -4603,6 +4603,10 @@
     "Zero retention": "Zero retention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "General Chat": "General Chat",
+    "Long Context": "Long Context",
+    "No models are currently available for the {{group}} group. Switch groups or contact an administrator.": "No models are currently available for the {{group}} group. Switch groups or contact an administrator.",
+    "Switched to {{model}} because the previous model is unavailable in {{group}}.": "Switched to {{model}} because the previous model is unavailable in {{group}}."
   }
 }

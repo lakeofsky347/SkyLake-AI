@@ -167,7 +167,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
       () =>
         models.reduce(
           (acc, model) => {
-            const category = model.category || t('Other')
+            const category = model.category || 'Other'
             if (!acc[category]) {
               acc[category] = []
             }
@@ -229,7 +229,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
             onValueChange={setSearchQuery}
           />
         )}
-        <CommandEmpty>{t('No model found.')}</CommandEmpty>
+        <CommandEmpty>
+          {models.length === 0 ? t('No model available') : t('No model found.')}
+        </CommandEmpty>
         <CommandList
           className={isMobile ? '!max-h-full flex-1 p-2' : 'max-h-[300px]'}
         >
@@ -250,7 +252,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
                       isMobile ? 'text-xs' : 'text-[10px]'
                     )}
                   >
-                    {t('{{category}} Models', { category })}
+                    {t('{{category}} Models', { category: t(category) })}
                   </div>
                   {categoryModels.map((model) => (
                     <CommandItem
@@ -383,6 +385,7 @@ export const GroupSelector: React.FC<GroupSelectorProps> = React.memo(
           const searchTerm = search.toLowerCase()
           const searchableFields = [
             group.label,
+            group.desc || '',
             group.description || '',
             group.value,
           ]

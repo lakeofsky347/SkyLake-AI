@@ -59,10 +59,6 @@ export function PlaygroundInput({
   const { t } = useTranslation()
   const [text, setText] = useState('')
 
-  const isModelSelectDisabled =
-    disabled || isModelLoading || models.length === 0
-  const isGroupSelectDisabled = disabled || groups.length === 0
-
   const handleSubmit = (message: PromptInputMessage) => {
     if (!message.text?.trim() || disabled) return
     onSubmit(message.text)
@@ -93,7 +89,7 @@ export function PlaygroundInput({
               selectedGroup={groupValue}
               groups={groups}
               onGroupChange={onGroupChange}
-              disabled={isModelSelectDisabled || isGroupSelectDisabled}
+              disabled={disabled || isModelLoading}
             />
 
             {isGenerating && onStop ? (

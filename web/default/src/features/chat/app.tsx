@@ -20,6 +20,7 @@ import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
+  AlertCircle,
   AlertTriangle,
   Bot,
   Crown,
@@ -40,16 +41,16 @@ import { toast } from 'sonner'
 import { formatLogQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
+import { useGroupModelOptions } from '@/hooks/use-group-model-options'
+import { ModelGroupSelector } from '@/components/model-group-selector'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Markdown } from '@/components/ui/markdown'
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
 import { getUserId } from '@/features/auth/lib/storage'
 import type { SystemStatus } from '@/features/auth/types'
-import { getUserGroups, getUserModels } from '@/features/playground/api'
 import { getSelfSubscriptionFull } from '@/features/subscriptions/api'
 import {
   createChatConversation,
@@ -626,18 +627,6 @@ export function ChatApp() {
     queryFn: getChatConversations,
   })
 
-  const modelsQuery = useQuery({
-    queryKey: ['chat', 'models'],
-    queryFn: getUserModels,
-    staleTime: 5 * 60 * 1000,
-  })
-
-  const groupsQuery = useQuery({
-    queryKey: ['chat', 'groups'],
-    queryFn: getUserGroups,
-    staleTime: 5 * 60 * 1000,
-  })
-
   const subscriptionStatusQuery = useQuery({
     queryKey: ['chat', 'subscription-status'],
     queryFn: getSelfSubscriptionFull,
@@ -645,8 +634,6 @@ export function ChatApp() {
   })
 
   const conversations = conversationsQuery.data?.data?.items ?? []
-  const models = modelsQuery.data ?? []
-  const groups = groupsQuery.data ?? []
   const activeSubscriptionCount =
     subscriptionStatusQuery.data?.data?.subscriptions?.length ?? 0
   const hasActiveSubscription = activeSubscriptionCount > 0
@@ -662,6 +649,19 @@ export function ChatApp() {
       ),
     [activeConversationId, conversations]
   )
+
+  const {
+    groups,
+    models,
+    noModelsMessage,
+    handleGroupChange,
+  } = useGroupModelOptions({
+    queryScope: 'chat',
+    selectedGroup,
+    selectedModel,
+    onGroupChange: setSelectedGroup,
+    onModelChange: setSelectedModel,
+  })
 
   const messagesQuery = useQuery({
     queryKey: ['chat', 'messages', activeConversationId],
@@ -785,18 +785,6 @@ export function ChatApp() {
       setSelectedGroup(activeConversation.group)
     }
   }, [activeConversation])
-
-  useEffect(() => {
-    if (!selectedModel && models.length > 0) {
-      setSelectedModel(models[0].value)
-    }
-  }, [models, selectedModel])
-
-  useEffect(() => {
-    if (!selectedGroup && groups.length > 0) {
-      setSelectedGroup(groups[0].value)
-    }
-  }, [groups, selectedGroup])
 
   useEffect(() => {
     if (activeConversationId === null) {
@@ -1313,45 +1301,23 @@ export function ChatApp() {
               disabled={!activeConversation}
               className='min-w-0 flex-1'
             />
-            <div className='grid gap-2 sm:grid-cols-2 lg:w-[520px]'>
-              <NativeSelect
-                value={selectedModel}
-                onChange={(event) => setSelectedModel(event.target.value)}
-                aria-label={t('Model')}
-                className='w-full'
-              >
-                {models.length === 0 ? (
-                  <NativeSelectOption value=''>
-                    {t('No model available')}
-                  </NativeSelectOption>
-                ) : (
-                  models.map((model) => (
-                    <NativeSelectOption key={model.value} value={model.value}>
-                      {model.label}
-                    </NativeSelectOption>
-                  ))
-                )}
-              </NativeSelect>
-              <NativeSelect
-                value={selectedGroup}
-                onChange={(event) => setSelectedGroup(event.target.value)}
-                aria-label={t('Group')}
-                className='w-full'
-              >
-                {groups.length === 0 ? (
-                  <NativeSelectOption value=''>
-                    {t('Default group')}
-                  </NativeSelectOption>
-                ) : (
-                  groups.map((group) => (
-                    <NativeSelectOption key={group.value} value={group.value}>
-                      {group.label}
-                    </NativeSelectOption>
-                  ))
-                )}
-              </NativeSelect>
+            <div className='flex justify-start lg:w-[520px] lg:justify-end'>
+              <ModelGroupSelector
+                selectedModel={selectedModel}
+                models={models}
+                onModelChange={setSelectedModel}
+                selectedGroup={selectedGroup}
+                groups={groups}
+                onGroupChange={handleGroupChange}
+              />
             </div>
           </div>
+          {noModelsMessage && (
+            <Alert className='mt-3'>
+              <AlertCircle className='size-4' />
+              <AlertDescription>{noModelsMessage}</AlertDescription>
+            </Alert>
+          )}
           <div className='border-border bg-muted/30 mt-3 flex flex-col gap-2 rounded-lg border px-3 py-2 sm:flex-row sm:items-center sm:justify-between'>
             <div className='flex min-w-0 items-center gap-2'>
               <div className='bg-background text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-md border'>

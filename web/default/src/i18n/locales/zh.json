@@ -4603,6 +4603,10 @@
     "Zero retention": "零数据保留",
     "Zhipu": "智谱",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "General Chat": "通用对话",
+    "Long Context": "长上下文",
+    "No models are currently available for the {{group}} group. Switch groups or contact an administrator.": "当前 {{group}} 分组暂无可用模型，请切换分组或联系管理员。",
+    "Switched to {{model}} because the previous model is unavailable in {{group}}.": "由于之前的模型在 {{group}} 分组中不可用，已自动切换为 {{model}}。"
   }
 }
