@@ -1,0 +1,83 @@
+- generic [ref=e2]:
+  - generic [ref=e6]:
+    - banner:
+      - navigation [ref=e8]:
+        - link "logo New API" [ref=e9] [cursor=pointer]:
+          - /url: /
+          - img "logo" [ref=e11]
+          - generic [ref=e12]: New API
+        - generic [ref=e13]:
+          - link "主页" [ref=e14] [cursor=pointer]:
+            - /url: /
+          - link "控制台" [ref=e15] [cursor=pointer]:
+            - /url: /console
+          - link "模型广场" [ref=e16] [cursor=pointer]:
+            - /url: /pricing
+          - link "排行榜" [ref=e17] [cursor=pointer]:
+            - /url: /rankings
+          - link "文档" [ref=e18] [cursor=pointer]:
+            - /url: https://docs.newapi.pro
+          - link "关于" [ref=e19] [cursor=pointer]:
+            - /url: /about
+          - button "更改语言" [ref=e21] [cursor=pointer]:
+            - img
+            - generic [ref=e22]: 更改语言
+          - button "切换主题" [ref=e23] [cursor=pointer]:
+            - img
+            - generic [ref=e24]: 切换主题
+          - button "通知" [ref=e26] [cursor=pointer]:
+            - img
+          - button "登录" [ref=e28] [cursor=pointer]
+    - main [ref=e29]:
+      - generic [ref=e32]:
+        - generic [ref=e33]:
+          - heading "New API" [level=1] [ref=e34]
+          - paragraph [ref=e35]: 同一个账号可用于直接模型聊天和开发者 API 访问。请选择最适合今天使用 AI 方式的工作区。
+        - generic [ref=e36]:
+          - link "Chat 工作区 面向对话、文件、图像和直接模型交互的低门槛多模态工作区。 适合订阅 共享账号余额" [ref=e37] [cursor=pointer]:
+            - /url: /chat
+            - generic [ref=e38]:
+              - img [ref=e40]
+              - img [ref=e42]
+            - heading "Chat 工作区" [level=2] [ref=e44]
+            - paragraph [ref=e45]: 面向对话、文件、图像和直接模型交互的低门槛多模态工作区。
+            - generic [ref=e46]:
+              - generic [ref=e47]:
+                - img [ref=e48]
+                - text: 适合订阅
+              - generic [ref=e51]:
+                - img [ref=e52]
+                - text: 共享账号余额
+          - link "API 控制台 管理 API 密钥、查看用量日志、控制钱包余额，并通过已配置的上游服务路由请求。 API 密钥管理 按量付费" [ref=e55] [cursor=pointer]:
+            - /url: /console
+            - generic [ref=e56]:
+              - img [ref=e58]
+              - img [ref=e61]
+            - heading "API 控制台" [level=2] [ref=e63]
+            - paragraph [ref=e64]: 管理 API 密钥、查看用量日志、控制钱包余额，并通过已配置的上游服务路由请求。
+            - generic [ref=e65]:
+              - generic [ref=e66]:
+                - img [ref=e67]
+                - text: API 密钥管理
+              - generic [ref=e70]:
+                - img [ref=e71]
+                - text: 按量付费
+        - generic [ref=e74]:
+          - button "创建账户" [ref=e75] [cursor=pointer]
+          - button "登录" [ref=e76] [cursor=pointer]
+    - contentinfo [ref=e77]:
+      - generic [ref=e78]:
+        - generic [ref=e80]:
+          - link "New API New API" [ref=e81] [cursor=pointer]:
+            - /url: /
+            - img "New API" [ref=e82]
+            - generic [ref=e83]: New API
+          - paragraph [ref=e84]: 强大的 API 管理平台
+        - generic [ref=e85]:
+          - generic [ref=e87]: © 2026 New API. 版权所有。
+          - generic [ref=e89]:
+            - text: © 2026
+            - link "New API" [ref=e90] [cursor=pointer]:
+              - /url: https://github.com/QuantumNous/new-api
+            - text: . 版权所有，由项目贡献者设计与开发。
+  - region "Notifications alt+T"

@@ -1,0 +1,116 @@
+- generic [ref=e2]:
+  - generic [ref=e6]:
+    - link "跳到主内容" [ref=e7] [cursor=pointer]:
+      - /url: "#content"
+    - banner [ref=e8]:
+      - generic [ref=e9]:
+        - button "Toggle Sidebar" [ref=e10] [cursor=pointer]:
+          - img
+          - generic [ref=e11]: Toggle Sidebar
+        - link "返回主页" [ref=e12] [cursor=pointer]:
+          - /url: /
+          - img "徽标" [ref=e14]
+          - generic [ref=e15]: New API
+        - generic [ref=e16]:
+          - navigation [ref=e18]:
+            - link "主页" [ref=e19] [cursor=pointer]:
+              - /url: /
+            - link "控制台" [ref=e20] [cursor=pointer]:
+              - /url: /console
+            - link "模型广场" [ref=e21] [cursor=pointer]:
+              - /url: /pricing
+            - link "排行榜" [ref=e22] [cursor=pointer]:
+              - /url: /rankings
+            - link "文档" [ref=e23] [cursor=pointer]:
+              - /url: https://docs.newapi.pro
+            - link "关于" [ref=e24] [cursor=pointer]:
+              - /url: /about
+          - button "搜索" [ref=e25] [cursor=pointer]:
+            - img
+            - generic [ref=e26]: 搜索
+            - generic:
+              - generic: ⌘
+              - text: K
+          - button "通知" [ref=e28] [cursor=pointer]:
+            - img
+          - button "更改语言" [ref=e29] [cursor=pointer]:
+            - img
+            - generic [ref=e30]: 更改语言
+          - button "打开主题设置" [ref=e31] [cursor=pointer]:
+            - img
+          - button "L" [ref=e32] [cursor=pointer]:
+            - generic [ref=e34]: L
+    - generic [ref=e35]:
+      - generic [ref=e38]:
+        - generic [ref=e40]:
+          - generic [ref=e41]: 聊天
+          - list [ref=e42]:
+            - listitem [ref=e43]:
+              - link "Chat 工作区" [ref=e44] [cursor=pointer]:
+                - /url: /chat
+                - img [ref=e45]
+                - generic [ref=e47]: Chat 工作区
+            - listitem [ref=e48]:
+              - link "API 控制台" [ref=e49] [cursor=pointer]:
+                - /url: /console
+                - img [ref=e50]
+                - generic [ref=e54]: API 控制台
+        - button "Toggle Sidebar" [ref=e55]
+      - main [ref=e56]:
+        - generic [ref=e58]:
+          - complementary [ref=e59]:
+            - generic [ref=e60]:
+              - generic [ref=e61]:
+                - heading "Chat 工作区" [level=1] [ref=e62]
+                - paragraph [ref=e63]: 已保存会话
+              - button "???" [ref=e64] [cursor=pointer]:
+                - img
+            - generic [ref=e66]:
+              - img [ref=e67]
+              - paragraph [ref=e69]: 暂无已保存聊天
+          - main [ref=e70]:
+            - generic [ref=e71]:
+              - generic [ref=e72]:
+                - textbox "???" [disabled]
+                - generic [ref=e73]:
+                  - generic [ref=e74]:
+                    - combobox "模型" [ref=e75]:
+                      - option "暂无可用模型" [selected]
+                    - img
+                  - generic [ref=e76]:
+                    - combobox "分组" [ref=e77]:
+                      - option "默认分组" [selected]
+                    - img
+              - generic [ref=e78]:
+                - generic [ref=e79]:
+                  - img [ref=e81]
+                  - generic [ref=e85]:
+                    - paragraph [ref=e86]: Chat 计费
+                    - paragraph [ref=e87]: Chat 与 API 使用同一账户余额。
+                - generic [ref=e88]:
+                  - generic [ref=e89]: 共享账号余额
+                  - generic [ref=e90]:
+                    - img
+                    - text: 加载中...
+                  - button "钱包" [ref=e91] [cursor=pointer]:
+                    - img
+                    - text: 钱包
+            - generic [ref=e93]:
+              - img [ref=e94]
+              - text: 加载中...
+            - generic [ref=e97]:
+              - textbox "给模型发送消息..." [ref=e98]
+              - generic [ref=e99]:
+                - paragraph [ref=e100]: 按 Enter 发送，Shift+Enter 换行
+                - generic [ref=e101]:
+                  - button "上传照片" [ref=e102] [cursor=pointer]:
+                    - img
+                    - text: 上传照片
+                  - button "URL" [ref=e103] [cursor=pointer]
+                  - button "发送" [disabled]:
+                    - img
+                    - text: 发送
+  - generic [ref=e104]:
+    - heading "Command Palette" [level=2] [ref=e105]
+    - paragraph [ref=e106]: Search for a command to run...
+  - region "Notifications alt+T"

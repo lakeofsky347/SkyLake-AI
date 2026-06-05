@@ -1,0 +1,32 @@
+- generic [ref=e2]:
+  - generic [ref=e91]:
+    - link "徽标 New API" [ref=e92] [cursor=pointer]:
+      - /url: /
+      - img "徽标" [ref=e94]
+      - heading "New API" [level=1] [ref=e95]
+    - generic [ref=e98]:
+      - generic [ref=e99]:
+        - heading "登录" [level=2] [ref=e100]
+        - paragraph [ref=e101]:
+          - text: 没有账号？
+          - link "注册" [ref=e102] [cursor=pointer]:
+            - /url: /sign-up
+          - text: .
+      - generic [ref=e103]:
+        - generic [ref=e104]:
+          - generic [ref=e105]: 用户名或电子邮件
+          - textbox "用户名或电子邮件" [ref=e106]:
+            - /placeholder: 输入您的用户名或电子邮件
+        - generic [ref=e107]:
+          - generic [ref=e108]: 密码
+          - generic [ref=e109]:
+            - textbox "密码" [ref=e110]:
+              - /placeholder: 输入密码
+            - button "Toggle password visibility" [ref=e111] [cursor=pointer]:
+              - img
+          - link "忘记密码？" [ref=e112] [cursor=pointer]:
+            - /url: /forgot-password
+        - button "登录" [ref=e113] [cursor=pointer]:
+          - img
+          - text: 登录
+  - region "Notifications alt+T"
